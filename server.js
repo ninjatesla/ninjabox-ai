@@ -106,23 +106,25 @@ function connectTikTok() {
 
   // CHAT
   tiktokConnection.on(WebcastEvent.CHAT, (data) => {
+
   console.log("CHAT RAW:", JSON.stringify(data));
-    const event = {
-      type: "chat",
-      username: data.uniqueId,
-      nickname: data.nickname,
-      comment: data.comment
-    };
 
-    console.log(
-      "CHAT:",
-      event.username,
-      "=>",
-      event.comment
-    );
+  const event = {
+    type: "chat",
+    username: data.user?.displayId,
+    nickname: data.user?.nickname,
+    comment: data.content
+  };
 
-    broadcast(event);
-  });
+  console.log(
+    "CHAT:",
+    event.username,
+    "=>",
+    event.comment
+  );
+
+  broadcast(event);
+});
 
   // GIFT
   
