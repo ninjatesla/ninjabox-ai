@@ -107,8 +107,6 @@ function connectTikTok() {
   // CHAT
   tiktokConnection.on(WebcastEvent.CHAT, (data) => {
 
-  console.log("CHAT RAW:", JSON.stringify(data));
-
   const event = {
     type: "chat",
     username: data.user?.displayId,
