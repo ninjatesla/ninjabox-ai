@@ -9,7 +9,7 @@ import {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const TIKTOK_USERNAME = "ninjaboxx";
+const TIKTOK_USERNAME = "ninjacoretrader";
 
 let tiktokConnection = null;
 let tiktokConnected = false;
