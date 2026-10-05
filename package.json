@@ -1,3 +1,4 @@
+
 {
   "name": "ninjabox-ai-live",
   "version": "0.1.0",
@@ -7,6 +8,7 @@
   },
   "dependencies": {
     "express": "^4.21.2",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "tiktok-live-connector": "^2.5.0"
   }
 }
