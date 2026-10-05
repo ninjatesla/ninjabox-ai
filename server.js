@@ -124,4 +124,37 @@ function connectTikTok() {
   });
 
   // GIFT
-  tiktokConnection.on(WebcastEvent.G
+  
+// LIKE
+tiktokConnection.on(WebcastEvent.LIKE, (data) => {
+  const event = {
+    type: "like",
+    username: data.user?.uniqueId,
+    likeCount: data.likeCount,
+    totalLikeCount: data.totalLikeCount
+  };
+
+  console.log(
+    "LIKE:",
+    event.username,
+    "=>",
+    event.likeCount
+  );
+
+  broadcast(event);
+});
+
+tiktokConnection.connect().catch((error) => {
+  tiktokConnected = false;
+
+  console.error(
+    "TikTok connection failed:",
+    error.message || error
+  );
+
+  setTimeout(connectTikTok, 15000);
+});
+
+}
+
+connectTikTok();
