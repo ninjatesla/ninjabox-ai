@@ -1,10 +1,10 @@
-const express = require("express");
-const WebSocket = require("ws");
-const {
+import express from "express";
+import { WebSocketServer, WebSocket } from "ws";
+import {
   TikTokLiveConnection,
   WebcastEvent,
   ControlEvent
-} = require("tiktok-live-connector");
+} from "tiktok-live-connector";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,7 +35,7 @@ const server = app.listen(PORT, () => {
 });
 
 // Browser/WebSocket clients
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocketServer({ server });
 const clients = new Set();
 
 function broadcast(event) {
@@ -65,7 +65,13 @@ wss.on("connection", (socket) => {
 function connectTikTok() {
   console.log("Connecting to TikTok LIVE: @" + TIKTOK_USERNAME);
 
-  tiktokConnection = new TikTokLiveConnection(TIKTOK_USERNAME);
+  tiktokConnection = new TikTokLiveConnection(
+    TIKTOK_USERNAME,
+    {
+      processInitialData: false,
+      fetchRoomInfoOnConnect: true
+    }
+  );
 
   tiktokConnection.on(ControlEvent.CONNECTED, (state) => {
     tiktokConnected = true;
@@ -83,6 +89,7 @@ function connectTikTok() {
 
   tiktokConnection.on(ControlEvent.DISCONNECTED, () => {
     tiktokConnected = false;
+
     console.log("TikTok LIVE disconnected.");
 
     broadcast({
@@ -117,56 +124,4 @@ function connectTikTok() {
   });
 
   // GIFT
-  tiktokConnection.on(WebcastEvent.GIFT, (data) => {
-    const event = {
-      type: "gift",
-      username: data.user?.uniqueId,
-      nickname: data.user?.nickname,
-      giftId: data.giftId,
-      repeatCount: data.repeatCount,
-      repeatEnd: data.repeatEnd
-    };
-
-    console.log(
-      "GIFT:",
-      event.username,
-      "=>",
-      event.giftId,
-      "x" + event.repeatCount
-    );
-
-    broadcast(event);
-  });
-
-  // LIKE
-  tiktokConnection.on(WebcastEvent.LIKE, (data) => {
-    const event = {
-      type: "like",
-      username: data.user?.uniqueId,
-      likeCount: data.likeCount,
-      totalLikeCount: data.totalLikeCount
-    };
-
-    console.log(
-      "LIKE:",
-      event.username,
-      "=>",
-      event.likeCount
-    );
-
-    broadcast(event);
-  });
-
-  tiktokConnection.connect().catch((error) => {
-    tiktokConnected = false;
-
-    console.error(
-      "TikTok connection failed:",
-      error.message || error
-    );
-
-    setTimeout(connectTikTok, 15000);
-  });
-}
-
-connectTikTok();
+  tiktokConnection.on(WebcastEvent.G
