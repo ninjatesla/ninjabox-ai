@@ -119,6 +119,7 @@ wss.on("connection", (socket) => {
 // =========================
 
 function buildTarotPrompt(
+  username,
   question,
   card,
   orientation
@@ -131,21 +132,10 @@ function buildTarotPrompt(
   return `
 Sen deneyimli, sezgisel ve geleneksel Tarot yorumcususun.
 
-Canlı yayında çok kısa ve doğal cevaplar veriyorsun.
+TikTok LIVE'da canlı Tarot yorumu yapıyorsun.
 
-Kurallar:
-- Türkçe cevap ver.
-- Soruyu doğrudan yorumla.
-- Kartın klasik Tarot anlamını temel al.
-- Düz/ters konumunu mutlaka dikkate al.
-- Kart anlamını sorunun bağlamına uygula.
-- Genel ve boş cümleler kurma.
-- Korkutucu veya kesin gelecek iddiaları yapma.
-- "Kesin olacak", "kesin dönecek" gibi mutlak ifadeler kullanma.
-- 1 veya en fazla 2 kısa cümle kullan.
-- Cevap canlı yayında seslendirilecek.
-- Kullanıcının adini kullan ve cevapla
-- Fazla açıklama yapma.
+Kullanıcı:
+${username}
 
 Soru:
 ${question}
@@ -156,11 +146,50 @@ ${card.name}
 Kart konumu:
 ${orientation === "upright" ? "Düz" : "Ters"}
 
-Kartın temel anlamı:
+Kartın klasik anlamı:
 ${meaning}
 
-Şimdi bu soruya Tarot okuyucusu gibi kısa,
-net ve doğal bir yorum ver.
+GÖREV:
+Kullanıcının sorusunu, seçilen kartı, kartın yönünü ve klasik Tarot anlamını birlikte değerlendir.
+
+Soruyu doğrudan cevapla.
+
+KURALLAR:
+- Türkçe cevap ver.
+- Çok doğal, insan gibi ve sezgisel konuş.
+- Kullanıcının adını gerektiğinde doğal şekilde kullan.
+- Sorunun tam olarak ne sorduğuna odaklan.
+- Kartın DÜZ veya TERS oluşunu mutlaka yorumuna yansıt.
+- Klasik Tarot sembolizmine sadık kal.
+- Kart olumluysa olumlu sonucu açıkça söyle.
+- Kart olumsuzsa olumsuz sonucu açıkça söyle.
+- Soruyu dolandırma.
+- "Belki", "her şey mümkün", "bunu zaman gösterecek" gibi kaçamak cevaplar verme.
+- Kullanıcı "Mehmet'le barışacak mıyım?" diye sorarsa ve kart barışmayı destekliyorsa, barışma yönünü açıkça söyle.
+- Kart barışmayı desteklemiyorsa, yakın zamanda barışma görünmediğini açıkça söyle.
+- Benzer şekilde aşk, iş, para, ilişki ve diğer sorularda kartın verdiği yönü açıkça belirt.
+- Tarot yorumunu kesin bir gerçek veya garanti gibi sunma.
+- "Kesin olacak", "kesin dönecek", "mutlaka gerçekleşecek" gibi mutlak ifadeler kullanma.
+- Korkutucu veya aşırı kesin ifadeler kullanma.
+- Genel ve herkese uyabilecek boş cümleler kurma.
+- Canlı yayında seslendirileceği için 1-3 kısa cümle kullan.
+- Fazla açıklama yapma.
+- Cevap sadece Tarot yorumu olsun.
+- "Kartın anlamı..." diye açıklama yapma.
+- Doğrudan yoruma gir.
+
+ÖRNEK:
+
+Soru:
+"Mehmet'le barışacak mıyım?"
+
+Olumlu kart örneği:
+"${username}, bu kart aranızdaki kırgınlığın ardından yeniden bir yakınlaşma ve barışma ihtimalini gösteriyor. Yakın zamanda iletişim kapısının açılması mümkün."
+
+Olumsuz kart örneği:
+"${username}, bu kart şu anda aranızdaki kırgınlığın devam ettiğini gösteriyor. Yakın zamanda bir barışma görünmüyor; önce aradaki sorunların çözülmesi gerekiyor."
+
+Şimdi canlı yayında söylenecek kısa, doğal ve doğrudan Tarot yorumunu yaz.
 `;
 }
 
@@ -169,6 +198,7 @@ net ve doğal bir yorum ver.
 // =========================
 
 async function generateGeminiTarotAnswer(
+  username,
   question,
   card,
   orientation
@@ -180,6 +210,7 @@ async function generateGeminiTarotAnswer(
   }
 
   const prompt = buildTarotPrompt(
+    username,
     question,
     card,
     orientation
@@ -243,6 +274,7 @@ async function generateGeminiTarotAnswer(
 // =========================
 
 async function generateOpenAITarotAnswer(
+  username,
   question,
   card,
   orientation
@@ -254,6 +286,7 @@ async function generateOpenAITarotAnswer(
   }
 
   const prompt = buildTarotPrompt(
+    username,
     question,
     card,
     orientation
@@ -301,6 +334,7 @@ async function generateOpenAITarotAnswer(
 // =========================
 
 async function generateTarotAnswer(
+  username,
   question,
   card,
   orientation
@@ -311,6 +345,7 @@ async function generateTarotAnswer(
     );
 
     return await generateGeminiTarotAnswer(
+      username,
       question,
       card,
       orientation
@@ -323,6 +358,7 @@ async function generateTarotAnswer(
     );
 
     return await generateOpenAITarotAnswer(
+      username,
       question,
       card,
       orientation
@@ -444,14 +480,19 @@ function connectTikTok() {
 
       const event = {
         type: "chat",
+
         username:
           data.user?.displayId,
+
         nickname:
           data.user?.nickname,
+
         userId:
           data.user?.id,
+
         comment:
           data.content,
+
         isModerator:
           data.userIdentity
             ?.isModeratorOfAnchor
@@ -477,16 +518,22 @@ function connectTikTok() {
 
         const tarotEvent = {
           type: "tarot",
+
           username:
             event.username,
+
           question:
             event.comment,
+
           cardName:
             draw.card.name,
+
           image:
             draw.card.image,
+
           orientation:
             draw.orientation,
+
           meaning:
             draw.meaning
         };
@@ -537,6 +584,7 @@ function connectTikTok() {
 
         const answer =
           await generateTarotAnswer(
+            event.username,
             event.comment,
             draw.card,
             draw.orientation
@@ -549,16 +597,22 @@ function connectTikTok() {
 
         broadcast({
           type: "tarot_answer",
+
           username:
             event.username,
+
           question:
             event.comment,
+
           cardName:
             draw.card.name,
+
           image:
             draw.card.image,
+
           orientation:
             draw.orientation,
+
           answer
         });
 
@@ -596,47 +650,4 @@ function connectTikTok() {
     WebcastEvent.LIKE,
     (data) => {
 
-      const event = {
-        type: "like",
-        username:
-          data.user?.uniqueId,
-        likeCount:
-          data.likeCount,
-        totalLikeCount:
-          data.totalLikeCount
-      };
-
-      console.log(
-        "LIKE:",
-        event.username,
-        "=>",
-        event.likeCount
-      );
-
-      broadcast(event);
-    }
-  );
-
-  // =========================
-  // CONNECT
-  // =========================
-
-  tiktokConnection
-    .connect()
-    .catch((error) => {
-
-      tiktokConnected = false;
-
-      console.error(
-        "TikTok connection failed:",
-        error.message || error
-      );
-
-      setTimeout(
-        connectTikTok,
-        15000
-      );
-    });
-}
-
-connectTikTok();
+      const event =
