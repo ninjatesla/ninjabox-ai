@@ -105,89 +105,102 @@ function connectTikTok() {
     console.error("TikTok error:", error);
   });
 
-  // CHAT
+  // =========================
+  // CHAT + TAROT
+  // =========================
   tiktokConnection.on(WebcastEvent.CHAT, (data) => {
-    
-  const event = {
-  type: "chat",
-  username: data.user?.displayId,
-  nickname: data.user?.nickname,
-  userId: data.user?.id,
-  comment: data.content,
-  isModerator: data.userIdentity?.isModeratorOfAnchor
-};
 
-  console.log(
-    "CHAT:",
-    event.username,
-    "=>",
-    event.comment
-  );
+    const event = {
+      type: "chat",
+      username: data.user?.displayId,
+      nickname: data.user?.nickname,
+      userId: data.user?.id,
+      comment: data.content,
+      isModerator: data.userIdentity?.isModeratorOfAnchor
+    };
 
-  broadcast(event);
-});
-  // TAROT TEST
-try {
-  const draw = drawOneCard();
+    console.log(
+      "CHAT:",
+      event.username,
+      "=>",
+      event.comment
+    );
 
-  const tarotEvent = {
-    type: "tarot",
-    username: event.username,
-    question: event.comment,
-    cardName: draw.card.name,
-    image: draw.card.image,
-    orientation: draw.orientation,
-    meaning: draw.meaning
-  };
+    broadcast(event);
 
-  console.log("TAROT:");
-  console.log("User:", tarotEvent.username);
-  console.log("Question:", tarotEvent.question);
-  console.log("Card:", tarotEvent.cardName);
-  console.log("Orientation:", tarotEvent.orientation);
-  console.log("Meaning:", tarotEvent.meaning);
-  console.log("Image:", tarotEvent.image);
+    // TAROT TEST
+    try {
+      const draw = drawOneCard();
 
-  broadcast(tarotEvent);
-} catch (error) {
-  console.error("Tarot draw failed:", error);
-}
+      const tarotEvent = {
+        type: "tarot",
+        username: event.username,
+        question: event.comment,
+        cardName: draw.card.name,
+        image: draw.card.image,
+        orientation: draw.orientation,
+        meaning: draw.meaning
+      };
 
+      console.log("TAROT:");
+      console.log("User:", tarotEvent.username);
+      console.log("Question:", tarotEvent.question);
+      console.log("Card:", tarotEvent.cardName);
+      console.log("Orientation:", tarotEvent.orientation);
+      console.log("Meaning:", tarotEvent.meaning);
+      console.log("Image:", tarotEvent.image);
+
+      broadcast(tarotEvent);
+
+    } catch (error) {
+      console.error("Tarot draw failed:", error);
+    }
+
+  });
+
+  // =========================
   // GIFT TEST
-tiktokConnection.on(WebcastEvent.GIFT, (data) => {
-  console.log("GIFT RAW:", JSON.stringify(data));
-});
-  
-// LIKE
-tiktokConnection.on(WebcastEvent.LIKE, (data) => {
-  const event = {
-    type: "like",
-    username: data.user?.uniqueId,
-    likeCount: data.likeCount,
-    totalLikeCount: data.totalLikeCount
-  };
+  // =========================
+  tiktokConnection.on(WebcastEvent.GIFT, (data) => {
+    console.log("GIFT RAW:", JSON.stringify(data));
+  });
 
-  console.log(
-    "LIKE:",
-    event.username,
-    "=>",
-    event.likeCount
-  );
+  // =========================
+  // LIKE
+  // =========================
+  tiktokConnection.on(WebcastEvent.LIKE, (data) => {
 
-  broadcast(event);
-});
+    const event = {
+      type: "like",
+      username: data.user?.uniqueId,
+      likeCount: data.likeCount,
+      totalLikeCount: data.totalLikeCount
+    };
 
-tiktokConnection.connect().catch((error) => {
-  tiktokConnected = false;
+    console.log(
+      "LIKE:",
+      event.username,
+      "=>",
+      event.likeCount
+    );
 
-  console.error(
-    "TikTok connection failed:",
-    error.message || error
-  );
+    broadcast(event);
+  });
 
-  setTimeout(connectTikTok, 15000);
-});
+  // =========================
+  // CONNECT
+  // =========================
+  tiktokConnection.connect().catch((error) => {
 
+    tiktokConnected = false;
+
+    console.error(
+      "TikTok connection failed:",
+      error.message || error
+    );
+
+    setTimeout(connectTikTok, 15000);
+  });
 }
 
 connectTikTok();
