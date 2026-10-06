@@ -5,6 +5,7 @@ import {
   WebcastEvent,
   ControlEvent
 } from "tiktok-live-connector";
+import { drawOneCard } from "./tarotEngine.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -106,7 +107,6 @@ function connectTikTok() {
 
   // CHAT
   tiktokConnection.on(WebcastEvent.CHAT, (data) => {
-  import { drawOneCard } from "./tarotEngine.js";
     
   const event = {
   type: "chat",
