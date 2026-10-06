@@ -23,7 +23,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const GEMINI_MODEL =
-  process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  process.env.GEMINI_MODEL || "gemini-3.5-Lite";
 
 const OPENAI_MODEL =
   process.env.OPENAI_MODEL || "gpt-6-luna";
