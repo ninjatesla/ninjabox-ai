@@ -23,7 +23,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const GEMINI_MODEL =
-  process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
 const OPENAI_MODEL =
   process.env.OPENAI_MODEL || "gpt-6-luna";
@@ -144,7 +144,7 @@ Kurallar:
 - "Kesin olacak", "kesin dönecek" gibi mutlak ifadeler kullanma.
 - 1 veya en fazla 2 kısa cümle kullan.
 - Cevap canlı yayında seslendirilecek.
-- Kullanıcının adını cevap içinde kullanma.
+- Kullanıcının adini kullan ve cevapla
 - Fazla açıklama yapma.
 
 Soru:
