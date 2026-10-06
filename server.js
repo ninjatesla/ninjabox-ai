@@ -126,7 +126,10 @@ function connectTikTok() {
   broadcast(event);
 });
 
-  // GIFT
+  // GIFT TEST
+tiktokConnection.on(WebcastEvent.GIFT, (data) => {
+  console.log("GIFT RAW:", JSON.stringify(data));
+});
   
 // LIKE
 tiktokConnection.on(WebcastEvent.LIKE, (data) => {
