@@ -106,7 +106,8 @@ function connectTikTok() {
 
   // CHAT
   tiktokConnection.on(WebcastEvent.CHAT, (data) => {
-
+  import { drawOneCard } from "./tarotEngine.js";
+    
   const event = {
   type: "chat",
   username: data.user?.displayId,
@@ -125,6 +126,32 @@ function connectTikTok() {
 
   broadcast(event);
 });
+  // TAROT TEST
+try {
+  const draw = drawOneCard();
+
+  const tarotEvent = {
+    type: "tarot",
+    username: event.username,
+    question: event.comment,
+    cardName: draw.card.name,
+    image: draw.card.image,
+    orientation: draw.orientation,
+    meaning: draw.meaning
+  };
+
+  console.log("TAROT:");
+  console.log("User:", tarotEvent.username);
+  console.log("Question:", tarotEvent.question);
+  console.log("Card:", tarotEvent.cardName);
+  console.log("Orientation:", tarotEvent.orientation);
+  console.log("Meaning:", tarotEvent.meaning);
+  console.log("Image:", tarotEvent.image);
+
+  broadcast(tarotEvent);
+} catch (error) {
+  console.error("Tarot draw failed:", error);
+}
 
   // GIFT TEST
 tiktokConnection.on(WebcastEvent.GIFT, (data) => {
