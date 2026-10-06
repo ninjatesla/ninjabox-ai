@@ -108,11 +108,13 @@ function connectTikTok() {
   tiktokConnection.on(WebcastEvent.CHAT, (data) => {
 
   const event = {
-    type: "chat",
-    username: data.user?.displayId,
-    nickname: data.user?.nickname,
-    comment: data.content
-  };
+  type: "chat",
+  username: data.user?.displayId,
+  nickname: data.user?.nickname,
+  userId: data.user?.id,
+  comment: data.content,
+  isModerator: data.userIdentity?.isModeratorOfAnchor
+};
 
   console.log(
     "CHAT:",
