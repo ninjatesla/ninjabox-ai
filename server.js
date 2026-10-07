@@ -148,7 +148,9 @@ Kurallar:
 - Kart olumsuzsa olumsuz sonucu açıkça söyle.
 - Örneğin "Mehmet'le barışacak mıyım?" sorusunda kart barışmayı destekliyorsa barışma yönünü açıkça söyle.
 - Kart desteklemiyorsa yakın zamanda barışma görünmediğini açıkça söyle.
-- Kullanıcının adını gerektiğinde doğal şekilde kullan.
+- Kullanıcının adını yalnızca doğal ve anlamlı olduğu durumda kullan.
+- Kullanıcı adını tek başına cevap olarak verme.
+- Kullanıcı adı cevabın içeriğinin yerine geçmesin.
 - 1-3 kısa cümle kullan.
 - Cevap canlı yayında seslendirilecek.
 - Fazla açıklama yapma.
@@ -168,8 +170,11 @@ ${orientation === "upright" ? "Düz" : "Ters"}
 Kartın temel anlamı:
 ${meaning}
 
-Şimdi bu soruya Tarot okuyucusu gibi kısa,
-net ve doğal bir yorum ver.
+Şimdi soruya doğrudan cevap veren,
+kartın anlamını soruyla ilişkilendiren,
+kısa ve doğal bir Tarot yorumu yaz.
+
+Sadece yorumu yaz.
 `;
 }
 
