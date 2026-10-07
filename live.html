@@ -136,6 +136,7 @@
        ========================= */
 
     .chat-panel {
+      display: none !important;
       position: absolute;
 
       left: 4%;
@@ -190,38 +191,25 @@
        ========================= */
 
     .answer {
-      position: absolute;
-
-      left: 4%;
-      right: 4%;
-      bottom: 7%;
-
-      min-height: 11%;
-      max-height: 20%;
-
-      padding: 13px 15px;
-
-      border-radius: 17px;
-
-      background: rgba(0, 0, 0, 0.80);
-
-      border: 1px solid rgba(255, 255, 255, 0.16);
-
-      color: white;
-
-      font-size: clamp(15px, 4vw, 21px);
-
-      font-weight: 600;
-
-      line-height: 1.32;
-
-      text-align: center;
-
-      overflow: hidden;
-
-      text-shadow:
-        0 2px 5px #000;
-    }
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 16%;
+  min-height: auto;
+  max-height: 12%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: white;
+  font-size: clamp(14px, 3.8vw, 19px);
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  overflow: hidden;
+  text-shadow: 0 2px 5px #000;
+  z-index: 7;
+}
 
     /* =========================
        LIVE DURUMU
@@ -481,20 +469,9 @@
 
         /* TAROT CEVABI */
 
-        if (
-          data.type !==
-          "tarot_answer"
-        ) {
-
-          return;
-        }
-
         if (data.type === "tarot") {
-
   usernameEl.textContent =
-    data.username
-      ? "@" + data.username
-      : "";
+    data.username ? "@" + data.username : "";
 
   questionEl.textContent =
     data.question || "";
@@ -505,15 +482,39 @@
       : "DÜZ";
 
   answerEl.textContent =
-    "Kart yorumlanıyor...";
+    "Kartın mesajına bakıyorum...";
 
   if (data.image) {
+    cardEl.src = "/" + data.image;
+    cardEl.style.display = "block";
+  }
 
-    cardEl.src =
-      "/" + data.image;
+  setTimeout(() => {
+    answerEl.textContent =
+      "Şimdi soruna bakıyorum...";
+  }, 1400);
 
-    cardEl.style.display =
-      "block";
+  return;
+}
+
+if (data.type === "tarot_answer") {
+  usernameEl.textContent =
+    data.username ? "@" + data.username : "";
+
+  questionEl.textContent =
+    data.question || "";
+
+  orientationEl.textContent =
+    data.orientation === "reversed"
+      ? "TERS"
+      : "DÜZ";
+
+  answerEl.textContent =
+    data.answer || "";
+
+  if (data.image) {
+    cardEl.src = "/" + data.image;
+    cardEl.style.display = "block";
   }
 
   return;
