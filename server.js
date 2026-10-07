@@ -8,6 +8,7 @@ import {
 import { drawOneCard } from "./tarotEngine.js";
 
 const app = express();
+app.use(express.static("."));
 const PORT = process.env.PORT || 3000;
 const TIKTOK_USERNAME = "ninjacoretrader";
 
