@@ -9,31 +9,30 @@ import { drawOneCard } from "./tarotEngine.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
 const TIKTOK_USERNAME = "ninjacoretrader";
-
-// =========================
-// AI AYARLARI
-// =========================
 
 const AI_PROVIDER =
   (process.env.AI_PROVIDER || "gemini").toLowerCase();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-const GEMINI_MODEL =
-  process.env.GEMINI_MODEL || "gemini-3.5-flash";
-
 const OPENAI_MODEL =
   process.env.OPENAI_MODEL || "gpt-6-luna";
+
+const GEMINI_MODELS = (
+  process.env.GEMINI_MODELS ||
+  "gemini-3.5-flash,gemini-3.7-flash,gemini-3.8-flash"
+)
+  .split(",")
+  .map((x) => x.trim())
+  .filter(Boolean);
 
 let tiktokConnection = null;
 let tiktokConnected = false;
 
-// =========================
-// STATUS
-// =========================
+const questionQueue = [];
+let processingQuestion = false;
+let questionId = 0;
 
 app.get("/", (req, res) => {
   res.json({
@@ -43,7 +42,8 @@ app.get("/", (req, res) => {
     connected: tiktokConnected,
     aiProvider: AI_PROVIDER,
     geminiConfigured: !!GEMINI_API_KEY,
-    openaiConfigured: !!OPENAI_API_KEY
+    openaiConfigured: !!OPENAI_API_KEY,
+    geminiModels: GEMINI_MODELS
   });
 });
 
@@ -53,38 +53,18 @@ app.get("/health", (req, res) => {
     tiktokConnected,
     aiProvider: AI_PROVIDER,
     geminiConfigured: !!GEMINI_API_KEY,
-    openaiConfigured: !!OPENAI_API_KEY
+    openaiConfigured: !!OPENAI_API_KEY,
+    geminiModels: GEMINI_MODELS
   });
 });
 
-// =========================
-// SERVER
-// =========================
-
 const server = app.listen(PORT, () => {
-  console.log(
-    "NinjaBox AI LIVE running on port " + PORT
-  );
-
-  console.log(
-    "AI Provider:",
-    AI_PROVIDER
-  );
-
-  console.log(
-    "Gemini configured:",
-    !!GEMINI_API_KEY
-  );
-
-  console.log(
-    "OpenAI configured:",
-    !!OPENAI_API_KEY
-  );
+  console.log("NinjaBox AI LIVE running on port " + PORT);
+  console.log("AI Provider:", AI_PROVIDER);
+  console.log("Gemini models:", GEMINI_MODELS.join(" -> "));
+  console.log("Gemini configured:", !!GEMINI_API_KEY);
+  console.log("OpenAI configured:", !!OPENAI_API_KEY);
 });
-
-// =========================
-// WEBSOCKET
-// =========================
 
 const wss = new WebSocketServer({ server });
 const clients = new Set();
@@ -113,10 +93,6 @@ wss.on("connection", (socket) => {
     clients.delete(socket);
   });
 });
-
-// =========================
-// TAROT PROMPT
-// =========================
 
 function buildTarotPrompt(
   username,
@@ -178,9 +154,39 @@ Sadece yorumu yaz.
 `;
 }
 
-// =========================
-// GEMINI TAROT YORUMU
-// =========================
+function isValidAIAnswer(answer, cardName) {
+  if (!answer || typeof answer !== "string") return false;
+
+  const clean = answer.trim();
+
+  if (clean.length < 20 || clean.length > 500) {
+    return false;
+  }
+
+  const lower = clean.toLowerCase();
+  const cardLower =
+    String(cardName || "").toLowerCase();
+
+  if (cardLower && lower === cardLower) {
+    return false;
+  }
+
+  const badExact = [
+    "ninjac",
+    "kılıç",
+    "değnek",
+    "kupa",
+    "tılsım",
+    "no scary",
+    "no overly"
+  ];
+
+  if (badExact.includes(lower)) {
+    return false;
+  }
+
+  return true;
+}
 
 async function generateGeminiTarotAnswer(
   username,
@@ -201,62 +207,122 @@ async function generateGeminiTarotAnswer(
     orientation
   );
 
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  let lastError = null;
 
-  const response = await fetch(url, {
-    method: "POST",
+  for (const model of GEMINI_MODELS) {
+    try {
+      console.log(
+        "AI: Gemini model deneniyor:",
+        model
+      );
 
-    headers: {
-      "Content-Type": "application/json"
-    },
+      const url =
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
+      const response = await fetch(url, {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+          contents: [
             {
-              text: prompt
+              parts: [
+                {
+                  text: prompt
+                }
+              ]
             }
-          ]
+          ],
+
+          generationConfig: {
+            maxOutputTokens: 180,
+            temperature: 0.8
+          }
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        const answer =
+          data.candidates?.[0]?.content?.parts
+            ?.map((part) => part.text || "")
+            .join("")
+            .trim();
+
+        if (
+          isValidAIAnswer(
+            answer,
+            card.name
+          )
+        ) {
+          console.log(
+            "AI: Gemini başarılı:",
+            model
+          );
+
+          return answer;
         }
-      ],
 
-      generationConfig: {
-        maxOutputTokens: 120,
-        temperature: 0.8
+        lastError = new Error(
+          `Gemini ${model} geçersiz/yarım cevap döndürdü.`
+        );
+
+        console.log(
+          "AI: Geçersiz cevap, sıradaki Gemini modeline geçiliyor."
+        );
+
+        continue;
       }
-    })
-  });
 
-  if (!response.ok) {
-    const errorText =
-      await response.text();
+      const errorText =
+        await response.text();
 
-    throw new Error(
-      `Gemini API error ${response.status}: ${errorText}`
-    );
+      lastError = new Error(
+        `Gemini ${model} API error ${response.status}: ${errorText}`
+      );
+
+      console.error(
+        "AI: Gemini model başarısız:",
+        model,
+        response.status
+      );
+
+      if (
+        response.status === 429 ||
+        response.status === 500 ||
+        response.status === 502 ||
+        response.status === 503 ||
+        response.status === 504 ||
+        errorText.includes("UNAVAILABLE") ||
+        errorText.includes("RESOURCE_EXHAUSTED")
+      ) {
+        continue;
+      }
+
+      throw lastError;
+
+    } catch (error) {
+      lastError = error;
+
+      console.error(
+        "AI: Gemini model hatası:",
+        model,
+        error.message || error
+      );
+
+      continue;
+    }
   }
 
-  const data =
-    await response.json();
-
-  const answer =
-    data.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text || "")
-      .join("")
-      .trim();
-
-  return (
-    answer ||
-    "Kartın mesajı şu an netleşmiyor."
-  );
+  throw lastError ||
+    new Error(
+      "Tüm Gemini modelleri başarısız oldu."
+    );
 }
-
-// =========================
-// OPENAI TAROT YORUMU
-// ŞİMDİLİK HAZIRDA BEKLİYOR
-// =========================
 
 async function generateOpenAITarotAnswer(
   username,
@@ -291,7 +357,7 @@ async function generateOpenAITarotAnswer(
       body: JSON.stringify({
         model: OPENAI_MODEL,
         input: prompt,
-        max_output_tokens: 120
+        max_output_tokens: 180
       })
     }
   );
@@ -308,15 +374,22 @@ async function generateOpenAITarotAnswer(
   const data =
     await response.json();
 
-  return (
-    data.output_text?.trim() ||
-    "Kartın mesajı şu an netleşmiyor."
-  );
-}
+  const answer =
+    data.output_text?.trim();
 
-// =========================
-// AI ROUTER
-// =========================
+  if (
+    !isValidAIAnswer(
+      answer,
+      card.name
+    )
+  ) {
+    throw new Error(
+      "OpenAI geçersiz/yarım cevap döndürdü."
+    );
+  }
+
+  return answer;
+}
 
 async function generateTarotAnswer(
   username,
@@ -326,15 +399,37 @@ async function generateTarotAnswer(
 ) {
   if (AI_PROVIDER === "gemini") {
     console.log(
-      "AI: Gemini kullanılıyor."
+      "AI: Gemini fallback sistemi başlatılıyor."
     );
 
-    return await generateGeminiTarotAnswer(
-      username,
-      question,
-      card,
-      orientation
-    );
+    try {
+      return await generateGeminiTarotAnswer(
+        username,
+        question,
+        card,
+        orientation
+      );
+    } catch (geminiError) {
+      console.error(
+        "AI: Tüm Gemini modelleri başarısız:",
+        geminiError.message || geminiError
+      );
+
+      if (OPENAI_API_KEY) {
+        console.log(
+          "AI: OpenAI fallback devreye giriyor."
+        );
+
+        return await generateOpenAITarotAnswer(
+                    username,
+          question,
+          card,
+          orientation
+        );
+      }
+
+      throw geminiError;
+    }
   }
 
   if (AI_PROVIDER === "openai") {
@@ -355,12 +450,113 @@ async function generateTarotAnswer(
   );
 }
 
-// =========================
-// TIKTOK
-// =========================
+async function processQuestionQueue() {
+  if (processingQuestion) return;
+
+  const item = questionQueue.shift();
+
+  if (!item) return;
+
+  processingQuestion = true;
+
+  console.log(
+    "QUEUE: İşleniyor:",
+    item.username,
+    "=>",
+    item.question
+  );
+
+  try {
+    console.log(
+      "AI: Tarot yorumu hazırlanıyor..."
+    );
+
+    const answer =
+      await generateTarotAnswer(
+        item.username,
+        item.question,
+        item.card,
+        item.orientation
+      );
+
+    if (
+      !isValidAIAnswer(
+        answer,
+        item.card.name
+      )
+    ) {
+      throw new Error(
+        "AI geçersiz veya yarım cevap döndürdü."
+      );
+    }
+
+    console.log(
+      "AI ANSWER:",
+      answer
+    );
+
+    broadcast({
+      type: "tarot_answer",
+      username: item.username,
+      question: item.question,
+      cardName: item.card.name,
+      image: item.card.image,
+      orientation: item.orientation,
+      answer
+    });
+
+    console.log(
+      "QUEUE: Tamamlandı:",
+      item.username
+    );
+
+  } catch (error) {
+    console.error(
+      "QUEUE/AI error:",
+      error.message || error
+    );
+
+    if (item.retryCount < 1) {
+      item.retryCount += 1;
+
+      console.log(
+        "QUEUE: Tekrar denenecek:",
+        item.username
+      );
+
+      questionQueue.unshift(item);
+
+    } else {
+      console.log(
+        "QUEUE: İkinci deneme başarısız, sıradaki soruya geçiliyor:",
+        item.username
+      );
+
+      broadcast({
+        type: "tarot_answer",
+        username: item.username,
+        question: item.question,
+        cardName: item.card.name,
+        image: item.card.image,
+        orientation: item.orientation,
+        answer:
+          "Bu soru için kartın mesajı şu an netleşmedi. Biraz sonra tekrar sorabilirsin."
+      });
+    }
+
+  } finally {
+    processingQuestion = false;
+
+    if (questionQueue.length > 0) {
+      setTimeout(
+        processQuestionQueue,
+        250
+      );
+    }
+  }
+}
 
 function connectTikTok() {
-
   console.log(
     "Connecting to TikTok LIVE: @" +
       TIKTOK_USERNAME
@@ -375,14 +571,9 @@ function connectTikTok() {
       }
     );
 
-  // =========================
-  // CONNECTED
-  // =========================
-
   tiktokConnection.on(
     ControlEvent.CONNECTED,
     (state) => {
-
       tiktokConnected = true;
 
       console.log(
@@ -404,6 +595,11 @@ function connectTikTok() {
       );
 
       console.log(
+        "Gemini fallback:",
+        GEMINI_MODELS.join(" -> ")
+      );
+
+      console.log(
         "================================"
       );
 
@@ -414,14 +610,9 @@ function connectTikTok() {
     }
   );
 
-  // =========================
-  // DISCONNECTED
-  // =========================
-
   tiktokConnection.on(
     ControlEvent.DISCONNECTED,
     () => {
-
       tiktokConnected = false;
 
       console.log(
@@ -440,14 +631,9 @@ function connectTikTok() {
     }
   );
 
-  // =========================
-  // ERROR
-  // =========================
-
   tiktokConnection.on(
     ControlEvent.ERROR,
     (error) => {
-
       console.error(
         "TikTok error:",
         error
@@ -456,13 +642,12 @@ function connectTikTok() {
   );
 
   // =========================
-  // CHAT + TAROT + AI
+  // CHAT
   // =========================
 
   tiktokConnection.on(
     WebcastEvent.CHAT,
-    async (data) => {
-
+    (data) => {
       const event = {
         type: "chat",
         username:
@@ -475,138 +660,158 @@ function connectTikTok() {
           data.content,
         isModerator:
           data.userIdentity
-                      ?.isModeratorOfAnchor
-        };
+            ?.isModeratorOfAnchor
+      };
 
-        console.log(
-          "CHAT:",
-          event.username,
-          "=>",
-          event.comment
-        );
-
-        broadcast(event);
-
-        // =========================
-        // KART ÇEK
-        // =========================
-
-        try {
-
-          const draw =
-            drawOneCard();
-
-          const tarotEvent = {
-            type: "tarot",
-            username:
-              event.username,
-            question:
-              event.comment,
-            cardName:
-              draw.card.name,
-            image:
-              draw.card.image,
-            orientation:
-              draw.orientation,
-            meaning:
-              draw.meaning
-          };
-
-          console.log(
-            "TAROT:"
-          );
-
-          console.log(
-            "User:",
-            tarotEvent.username
-          );
-
-          console.log(
-            "Question:",
-            tarotEvent.question
-          );
-
-          console.log(
-            "Card:",
-            tarotEvent.cardName
-          );
-
-          console.log(
-            "Orientation:",
-            tarotEvent.orientation
-          );
-
-          console.log(
-            "Meaning:",
-            tarotEvent.meaning
-          );
-
-          console.log(
-            "Image:",
-            tarotEvent.image
-          );
-
-          broadcast(tarotEvent);
-
-          // =========================
-          // AI YORUMU
-          // =========================
-
-          console.log(
-            "AI: Tarot yorumu hazırlanıyor..."
-          );
-
-          const answer =
-            await generateTarotAnswer(
-              event.username,
-              event.comment,
-              draw.card,
-              draw.orientation
-            );
-
-          console.log(
-            "AI ANSWER:",
-            answer
-          );
-
-          broadcast({
-            type: "tarot_answer",
-            username:
-              event.username,
-            question:
-              event.comment,
-            cardName:
-              draw.card.name,
-            image:
-              draw.card.image,
-            orientation:
-              draw.orientation,
-            answer
-          });
-
-        } catch (error) {
-
-          console.error(
-            "Tarot/AI error:",
-            error.message || error
-          );
-        }
+      if (!event.comment?.trim()) {
+        return;
       }
-    );
+
+      console.log(
+        "CHAT:",
+        event.username,
+        "=>",
+        event.comment
+      );
+
+      broadcast(event);
+
+      // =========================
+      // SORU + KART KUYRUĞA EKLE
+      // =========================
+
+      const draw =
+        drawOneCard();
+
+      const item = {
+        id: ++questionId,
+        username:
+          event.username,
+        nickname:
+          event.nickname,
+        question:
+          event.comment,
+        card:
+          draw.card,
+        orientation:
+          draw.orientation,
+        meaning:
+          draw.meaning,
+        retryCount: 0,
+        priority: false
+      };
+
+      questionQueue.push(item);
+
+      console.log(
+        "QUEUE: Soru eklendi:",
+        item.username,
+        "=>",
+        item.question,
+        "| Bekleyen:",
+        questionQueue.length
+      );
+
+      broadcast({
+        type: "tarot",
+        username:
+          item.username,
+        question:
+          item.question,
+        cardName:
+          item.card.name,
+        image:
+          item.card.image,
+        orientation:
+          item.orientation,
+        meaning:
+          item.meaning
+      });
+
+      // Sadece boşta ise çalışır.
+      // Meşgulse mevcut kişi bitene kadar bekler.
+      processQuestionQueue();
+    }
+  );
 
   // =========================
-  // GIFT TEST
+  // GIFT
   // =========================
 
   tiktokConnection.on(
     WebcastEvent.GIFT,
     (data) => {
+      const username =
+        data.user?.displayId ||
+        data.user?.uniqueId ||
+        data.user?.nickname;
 
+      console.log(
+        "GIFT:",
+        username
+      );
+
+      const user =
+        String(
+          username || ""
+        ).toLowerCase();
+
+      const index =
+        questionQueue.findIndex(
+          (item) =>
+            String(
+              item.username || ""
+            ).toLowerCase() === user
+        );
+
+      // Bekleyen sorusu varsa başa taşı.
+      if (index > 0) {
+        const [item] =
+          questionQueue.splice(
+            index,
+            1
+          );
+
+        item.priority = true;
+
+        questionQueue.unshift(
+          item
+        );
+
+        console.log(
+          "QUEUE: Hediye önceliği:",
+          item.username
+        );
+
+        broadcast({
+          type:
+            "gift_priority",
+          username:
+            item.username
+        });
+
+      } else if (index === 0) {
+
+        console.log(
+          "QUEUE: Kullanıcı zaten sıranın başında:",
+          username
+        );
+
+      } else {
+
+        console.log(
+          "GIFT: Bekleyen soru bulunamadı:",
+          username
+        );
+      }
+
+      // Şimdilik gift raw logu kalsın.
       console.log(
         "GIFT RAW:",
         JSON.stringify(data)
       );
 
+      processQuestionQueue();
     }
   );
 
@@ -617,7 +822,6 @@ function connectTikTok() {
   tiktokConnection.on(
     WebcastEvent.LIKE,
     (data) => {
-
       const event = {
         type: "like",
         username:
@@ -646,7 +850,6 @@ function connectTikTok() {
   tiktokConnection
     .connect()
     .catch((error) => {
-
       tiktokConnected = false;
 
       console.error(
@@ -662,4 +865,3 @@ function connectTikTok() {
 }
 
 connectTikTok();
-
