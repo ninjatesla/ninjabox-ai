@@ -6,6 +6,7 @@ import {
   ControlEvent
 } from "tiktok-live-connector";
 import { drawOneCard } from "./tarotEngine.js";
+import { getLocalTarotAnswer } from "./tarotFallback.js";
 
 const app = express();
 app.use(express.static("."));
@@ -498,8 +499,10 @@ async function processQuestionQueue() {
       "AI: Tarot yorumu hazırlanıyor..."
     );
 
-    const answer =
-  await Promise.race([
+    let answer;
+
+try {
+  answer = await Promise.race([
     generateTarotAnswer(
       item.username,
       item.question,
@@ -507,28 +510,26 @@ async function processQuestionQueue() {
       item.orientation
     ),
 
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(
-          new Error(
-            "AI timeout: 20 saniye içinde cevap gelmedi."
-          )
-        );
-      }, 20000);
-    })
+    new Promise((resolve) =>
+      setTimeout(() => resolve(null), 10000)
+    )
   ]);
+} catch (error) {
+  console.log("AI cevap hatası:", error.message);
+  answer = null;
+}
 
-    if (
-      !isValidAIAnswer(
-        answer,
-        item.card.name
-      )
-    ) {
-      throw new Error(
-        "AI geçersiz veya yarım cevap döndürdü."
-      );
-    }
+if (!answer) {
+  console.log("AI 10 saniyede cevap vermedi. Yerel Tarot yorumu devrede.");
 
+  const localResult = getLocalTarotAnswer({
+    question: item.question,
+    cardId: item.card.id,
+    orientation: item.orientation
+  });
+
+  answer = localResult.answer;
+}
     console.log(
       "AI ANSWER:",
       answer
@@ -548,41 +549,6 @@ async function processQuestionQueue() {
       "QUEUE: Tamamlandı:",
       item.username
     );
-
-  } catch (error) {
-    console.error(
-      "QUEUE/AI error:",
-      error.message || error
-    );
-
-    if (item.retryCount < 1) {
-      item.retryCount += 1;
-
-      console.log(
-        "QUEUE: Tekrar denenecek:",
-        item.username
-      );
-
-      questionQueue.unshift(item);
-
-    } else {
-      console.log(
-        "QUEUE: İkinci deneme başarısız, sıradaki soruya geçiliyor:",
-        item.username
-      );
-
-      broadcast({
-        type: "tarot_answer",
-        username: item.username,
-        question: item.question,
-        cardName: item.card.name,
-        image: item.card.image,
-        orientation: item.orientation,
-        answer:
-          "Bu soru için kartın mesajı şu an netleşmedi. Biraz sonra tekrar sorabilirsin."
-      });
-    }
-
   } finally {
     processingQuestion = false;
 
