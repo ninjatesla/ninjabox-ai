@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>NinjaBox Tarot LIVE</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    .live {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .background-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .question-box {
+      position: absolute;
+      left: 5%;
+      right: 5%;
+      bottom: 6%;
+      padding: 18px;
+      border-radius: 18px;
+      background: rgba(0, 0, 0, 0.72);
+      color: white;
+      text-align: center;
+    }
+
+    .username {
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .question {
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
+    .card {
+      position: absolute;
+      top: 8%;
+      right: 6%;
+      width: 28%;
+      max-width: 190px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+    }
+
+    .orientation {
+      position: absolute;
+      top: 8%;
+      left: 6%;
+      padding: 8px 14px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.72);
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .answer {
+      position: absolute;
+      left: 5%;
+      right: 5%;
+      bottom: 20%;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(0, 0, 0, 0.68);
+      color: white;
+      font-size: 18px;
+      line-height: 1.4;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="live">
+
+    <video
+      id="backgroundVideo"
+      class="background-video"
+      src="/tarot.mp4"
+      autoplay
+      muted
+      loop
+      playsinline>
+    </video>
+
+    <div class="overlay">
+
+      <div id="orientation" class="orientation">
+        Tarot LIVE
+      </div>
+
+      <img
+        id="card"
+        class="card"
+        src=""
+        alt="Tarot Kartı"
+        style="display:none;">
+
+      <div class="answer" id="answer">
+        Tarot sorusu bekleniyor...
+      </div>
+
+      <div class="question-box">
+
+        <div
+          class="username"
+          id="username">
+        </div>
+
+        <div
+          class="question"
+          id="question">
+          Bir soru gönderildiğinde burada görünecek.
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+
+    const usernameEl =
+      document.getElementById("username");
+
+    const questionEl =
+      document.getElementById("question");
+
+    const cardEl =
+      document.getElementById("card");
+
+    const orientationEl =
+      document.getElementById("orientation");
+
+    const answerEl =
+      document.getElementById("answer");
+
+    /*
+      Railway WebSocket adresi
+      Daha sonra gerçek Railway adresini buraya koyacağız.
+    */
+
+    const socketUrl =
+      "wss://NINJABOX-RAILWAY-ADRESIN";
+
+    const socket =
+      new WebSocket(socketUrl);
+
+    socket.onopen = () => {
+
+      console.log(
+        "WebSocket bağlantısı başarılı."
+      );
+
+      answerEl.textContent =
+        "Tarot LIVE bağlantısı hazır.";
+
+    };
+
+    socket.onmessage = (event) => {
+
+      try {
+
+        const data =
+          JSON.parse(event.data);
+
+        console.log(
+          "LIVE EVENT:",
+          data
+        );
+
+        if (
+          data.type !== "tarot_answer"
+        ) {
+          return;
+        }
+
+        usernameEl.textContent =
+          data.username
+            ? "@" + data.username
+            : "";
+
+        questionEl.textContent =
+          data.question || "";
+
+        orientationEl.textContent =
+          data.orientation === "reversed"
+            ? "TERS"
+            : "DÜZ";
+
+        answerEl.textContent =
+          data.answer || "";
+
+        if (data.image) {
+
+          cardEl.src =
+            "/" + data.image;
+
+          cardEl.style.display =
+            "block";
+
+        }
+
+      } catch (error) {
+
+        console.error(
+          "LIVE event error:",
+          error
+        );
+
+      }
+
+    };
+
+    socket.onerror = (error) => {
+
+      console.error(
+        "WebSocket error:",
+        error
+      );
+
+      answerEl.textContent =
+        "WebSocket bağlantısı kurulamadı.";
+
+    };
+
+    socket.onclose = () => {
+
+      console.log(
+        "WebSocket bağlantısı kapandı."
+      );
+
+    };
+
+  </script>
+
+</body>
+</html>
