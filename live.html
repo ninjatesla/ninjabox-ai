@@ -489,6 +489,36 @@
           return;
         }
 
+        if (data.type === "tarot") {
+
+  usernameEl.textContent =
+    data.username
+      ? "@" + data.username
+      : "";
+
+  questionEl.textContent =
+    data.question || "";
+
+  orientationEl.textContent =
+    data.orientation === "reversed"
+      ? "TERS"
+      : "DÜZ";
+
+  answerEl.textContent =
+    "Kart yorumlanıyor...";
+
+  if (data.image) {
+
+    cardEl.src =
+      "/" + data.image;
+
+    cardEl.style.display =
+      "block";
+  }
+
+  return;
+}
+
 
         usernameEl.textContent =
           data.username
