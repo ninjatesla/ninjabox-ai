@@ -726,22 +726,6 @@ function connectTikTok() {
         questionQueue.length
       );
 
-      broadcast({
-        type: "tarot",
-        username:
-          item.username,
-        question:
-          item.question,
-        cardName:
-          item.card.name,
-        image:
-          item.card.image,
-        orientation:
-          item.orientation,
-        meaning:
-          item.meaning
-      });
-
       // Sadece boşta ise çalışır.
       // Meşgulse mevcut kişi bitene kadar bekler.
       processQuestionQueue();
