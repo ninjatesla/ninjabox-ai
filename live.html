@@ -318,6 +318,8 @@
 
     const chatPanelEl =
       document.getElementById("chatPanel");
+      let activeQuestionId = null;
+      let introTimer = null;
 
 
     const socketUrl =
@@ -407,162 +409,79 @@
        ========================= */
 
     socket.onmessage = (event) => {
+  try {
+    const data = JSON.parse(event.data);
 
-      try {
+    console.log("LIVE EVENT:", data);
 
-        const data =
-          JSON.parse(event.data);
+    if (data.type === "chat") {
+      return;
+    }
 
+    if (data.type === "gift_priority") {
+      return;
+    }
 
-        console.log(
-          "LIVE EVENT:",
-          data
-        );
+    if (data.type === "tarot_start") {
+      activeQuestionId = data.questionId;
 
-
-        /* CHAT */
-
-        if (
-          data.type === "chat"
-        ) {
-
-          addChat(
-            data.username,
-            data.comment
-          );
-
-
-          if (
-            !usernameEl.textContent
-          ) {
-
-            usernameEl.textContent =
-              data.username
-                ? "@" + data.username
-                : "";
-
-            questionEl.textContent =
-              data.comment || "";
-
-          }
-
-          return;
-        }
-
-
-        /* HEDİYE */
-
-        if (
-          data.type ===
-          "gift_priority"
-        ) {
-
-          addChat(
-            data.username,
-            "🎁 Hediye gönderdi — soru öne alındı!",
-            "gift"
-          );
-
-          return;
-        }
-
-
-        /* TAROT CEVABI */
-
-        if (data.type === "tarot") {
-  usernameEl.textContent =
-    data.username ? "@" + data.username : "";
-
-  questionEl.textContent =
-    data.question || "";
-
-  orientationEl.textContent =
-    data.orientation === "reversed"
-      ? "TERS"
-      : "DÜZ";
-
-  answerEl.textContent =
-    "Kartın mesajına bakıyorum...";
-
-  if (data.image) {
-    cardEl.src = "/" + data.image;
-    cardEl.style.display = "block";
-  }
-
-  setTimeout(() => {
-    answerEl.textContent =
-      "Şimdi soruna bakıyorum...";
-  }, 1400);
-
-  return;
-}
-
-if (data.type === "tarot_answer") {
-  usernameEl.textContent =
-    data.username ? "@" + data.username : "";
-
-  questionEl.textContent =
-    data.question || "";
-
-  orientationEl.textContent =
-    data.orientation === "reversed"
-      ? "TERS"
-      : "DÜZ";
-
-  answerEl.textContent =
-    data.answer || "";
-
-  if (data.image) {
-    cardEl.src = "/" + data.image;
-    cardEl.style.display = "block";
-  }
-
-  return;
-}
-
-
-        usernameEl.textContent =
-          data.username
-            ? "@" + data.username
-            : "";
-
-
-        questionEl.textContent =
-          data.question || "";
-
-
-        orientationEl.textContent =
-          data.orientation ===
-          "reversed"
-            ? "TERS"
-            : "DÜZ";
-
-
-        answerEl.textContent =
-          data.answer || "";
-
-
-        if (data.image) {
-
-          cardEl.src =
-            "/" + data.image;
-
-          cardEl.style.display =
-            "block";
-
-        }
-
-      } catch (error) {
-
-        console.error(
-          "LIVE event error:",
-          error
-        );
-
+      if (introTimer) {
+        clearTimeout(introTimer);
+        introTimer = null;
       }
 
-    };
+      usernameEl.textContent =
+        data.username ? "@" + data.username : "";
 
+      questionEl.textContent =
+        data.question || "";
+
+      orientationEl.textContent =
+        data.orientation === "reversed"
+          ? "TERS"
+          : "DÜZ";
+
+      answerEl.textContent =
+        "Kartın mesajına bakıyorum...";
+
+      if (data.image) {
+        cardEl.src = "/" + data.image;
+        cardEl.style.display = "block";
+      }
+
+      introTimer = setTimeout(() => {
+        if (activeQuestionId === data.questionId) {
+          answerEl.textContent =
+            "Şimdi soruna bakıyorum...";
+        }
+      }, 1400);
+
+      return;
+    }
+
+    if (data.type === "tarot_answer") {
+      if (data.questionId !== activeQuestionId) {
+        return;
+      }
+
+      if (introTimer) {
+        clearTimeout(introTimer);
+        introTimer = null;
+      }
+
+      answerEl.textContent =
+        data.answer || "";
+
+      return;
+    }
+
+  } catch (error) {
+    console.error(
+      "LIVE event error:",
+      error
+    );
+  }
+};
 
     /* =========================
        HATA
