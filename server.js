@@ -238,7 +238,7 @@ async function generateGeminiTarotAnswer(
           ],
 
           generationConfig: {
-  maxOutputTokens: 300,
+  maxOutputTokens: 500,
   temperature: 0.8,
   thinkingConfig: {
     thinkingLevel: "low"
@@ -249,7 +249,30 @@ async function generateGeminiTarotAnswer(
 
       if (response.ok) {
         const data = await response.json();
+        
+        const finishReason =
+  data.candidates?.[0]?.finishReason;
 
+console.log(
+  "AI: Gemini finishReason:",
+  model,
+  finishReason
+);
+
+if (
+  finishReason &&
+  finishReason !== "STOP"
+) {
+  lastError = new Error(
+    `Gemini ${model} tamamlanmadı: ${finishReason}`
+  );
+
+  console.log(
+    "AI: Yarım cevap reddedildi, sıradaki Gemini modeline geçiliyor."
+  );
+
+  continue;
+}
         const answer =
           data.candidates?.[0]?.content?.parts
             ?.map((part) => part.text || "")
