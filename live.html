@@ -1,282 +1,162 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#000000">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="manifest" href="/manifest.json">
-  <title>NinjaBox Tarot LIVE</title>
+<style>
+* {
+  box-sizing: border-box;
+}
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+}
 
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #000;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-    }
+.live {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
 
-    .live {
-      position: relative;
-      width: 100%;
-      height: 100vh;
-      overflow: hidden;
-      background: #000;
-    }
+.background-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-    .background-video {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 
-    .overlay {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-    }
+/* ÜST SORU */
+.question-box {
+  position: absolute;
+  top: 5%;
+  left: 4%;
+  right: 4%;
+  padding: 12px 15px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.68);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: white;
+  text-align: center;
+  z-index: 5;
+}
 
-    .question-box {
-      position: absolute;
-      left: 5%;
-      right: 5%;
-      bottom: 6%;
-      padding: 18px;
-      border-radius: 18px;
-      background: rgba(0, 0, 0, 0.72);
-      color: white;
-      text-align: center;
-    }
+.username {
+  font-size: 17px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
 
-    .username {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 8px;
-    }
+.question {
+  font-size: clamp(17px, 4.5vw, 24px);
+  font-weight: bold;
+  line-height: 1.2;
+}
 
-    .question {
-      font-size: 18px;
-      line-height: 1.35;
-    }
+/* TAROT KARTI */
+.card {
+  position: absolute;
+  top: 27%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(39vw, 240px);
+  max-height: 34vh;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 10px 35px rgba(0,0,0,0.9);
+  z-index: 3;
+}
 
-    .card {
-      position: absolute;
-      top: 8%;
-      right: 6%;
-      width: 28%;
-      max-width: 190px;
-      border-radius: 12px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
-    }
+.orientation {
+  position: absolute;
+  top: 24%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(0,0,0,0.8);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  z-index: 4;
+}
 
-    .orientation {
-      position: absolute;
-      top: 8%;
-      left: 6%;
-      padding: 8px 14px;
-      border-radius: 12px;
-      background: rgba(0, 0, 0, 0.72);
-      color: white;
-      font-size: 16px;
-      font-weight: bold;
-    }
+/* CANLI CHAT */
+.chat-panel {
+  position: absolute;
+  left: 4%;
+  bottom: 30%;
+  width: 65%;
+  max-height: 24%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  z-index: 6;
+}
 
-    .answer {
-      position: absolute;
-      left: 5%;
-      right: 5%;
-      bottom: 20%;
-      padding: 16px;
-      border-radius: 18px;
-      background: rgba(0, 0, 0, 0.68);
-      color: white;
-      font-size: 18px;
-      line-height: 1.4;
-      text-align: center;
-    }
-  </style>
-</head>
+.chat-line {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 5px 9px;
+  border-radius: 13px;
+  background: rgba(0,0,0,0.62);
+  color: white;
+  font-size: clamp(12px, 3.2vw, 16px);
+  line-height: 1.2;
+  text-shadow: 0 1px 3px #000;
+}
 
-<body>
+.chat-name {
+  font-weight: bold;
+  margin-right: 4px;
+}
 
-  <div class="live">
+.chat-line.gift {
+  background: rgba(110,45,165,0.78);
+  font-weight: bold;
+}
 
-    <video
-      id="backgroundVideo"
-      class="background-video"
-      src="/tarot.mp4"
-      autoplay
-      muted
-      loop
-      playsinline>
-    </video>
+/* GEMINI CEVABI */
+.answer {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: 7%;
+  min-height: 11%;
+  max-height: 20%;
+  padding: 13px 15px;
+  border-radius: 17px;
+  background: rgba(0,0,0,0.80);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: white;
+  font-size: clamp(15px, 4vw, 21px);
+  font-weight: 600;
+  line-height: 1.32;
+  text-align: center;
+  overflow: hidden;
+  text-shadow: 0 2px 5px #000;
+}
 
-    <div class="overlay">
-
-      <div id="orientation" class="orientation">
-        Tarot LIVE
-      </div>
-
-      <img
-        id="card"
-        class="card"
-        src=""
-        alt="Tarot Kartı"
-        style="display:none;">
-
-      <div class="answer" id="answer">
-        Tarot sorusu bekleniyor...
-      </div>
-
-      <div class="question-box">
-
-        <div
-          class="username"
-          id="username">
-        </div>
-
-        <div
-          class="question"
-          id="question">
-          Bir soru gönderildiğinde burada görünecek.
-        </div>
-
-      </div>
-
-    </div>
-
-  </div>
-
-  <script>
-
-    const usernameEl =
-      document.getElementById("username");
-
-    const questionEl =
-      document.getElementById("question");
-
-    const cardEl =
-      document.getElementById("card");
-
-    const orientationEl =
-      document.getElementById("orientation");
-
-    const answerEl =
-      document.getElementById("answer");
-
-    /*
-      Railway WebSocket adresi
-      Daha sonra gerçek Railway adresini buraya koyacağız.
-    */
-
-    const socketUrl =
-  "wss://ninjabox-ai-production.up.railway.app";
-
-    const socket =
-      new WebSocket(socketUrl);
-
-    socket.onopen = () => {
-
-      console.log(
-        "WebSocket bağlantısı başarılı."
-      );
-
-      answerEl.textContent =
-        "Tarot LIVE bağlantısı hazır.";
-
-    };
-
-    socket.onmessage = (event) => {
-
-      try {
-
-        const data =
-          JSON.parse(event.data);
-
-        console.log(
-          "LIVE EVENT:",
-          data
-        );
-
-        if (
-          data.type !== "tarot_answer"
-        ) {
-          return;
-        }
-
-        usernameEl.textContent =
-          data.username
-            ? "@" + data.username
-            : "";
-
-        questionEl.textContent =
-          data.question || "";
-
-        orientationEl.textContent =
-          data.orientation === "reversed"
-            ? "TERS"
-            : "DÜZ";
-
-        answerEl.textContent =
-          data.answer || "";
-
-        if (data.image) {
-
-          cardEl.src =
-            "/" + data.image;
-
-          cardEl.style.display =
-            "block";
-
-        }
-
-      } catch (error) {
-
-        console.error(
-          "LIVE event error:",
-          error
-        );
-
-      }
-
-    };
-
-    socket.onerror = (error) => {
-
-      console.error(
-        "WebSocket error:",
-        error
-      );
-
-      answerEl.textContent =
-        "WebSocket bağlantısı kurulamadı.";
-
-    };
-
-    socket.onclose = () => {
-
-      console.log(
-        "WebSocket bağlantısı kapandı."
-      );
-
-    };
-
-  </script>
-<script>
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js");
-  }
-</script>
-</body>
-</html>
+.status {
+  position: absolute;
+  top: 2%;
+  left: 4%;
+  padding: 4px 9px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.55);
+  color: white;
+  font-size: 11px;
+  z-index: 8;
+}
+</style>
