@@ -493,6 +493,16 @@ async function processQuestionQueue() {
     "=>",
     item.question
   );
+    broadcast({
+    type: "tarot_start",
+    questionId: item.id,
+    username: item.username,
+    question: item.question,
+    cardName: item.card.name,
+    image: item.card.image,
+    orientation: item.orientation,
+    meaning: item.meaning
+  });
 
   try {
     console.log(
