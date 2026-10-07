@@ -499,12 +499,24 @@ async function processQuestionQueue() {
     );
 
     const answer =
-      await generateTarotAnswer(
-        item.username,
-        item.question,
-        item.card,
-        item.orientation
-      );
+  await Promise.race([
+    generateTarotAnswer(
+      item.username,
+      item.question,
+      item.card,
+      item.orientation
+    ),
+
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            "AI timeout: 20 saniye içinde cevap gelmedi."
+          )
+        );
+      }, 20000);
+    })
+  ]);
 
     if (
       !isValidAIAnswer(
