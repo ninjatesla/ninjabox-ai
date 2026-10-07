@@ -238,9 +238,12 @@ async function generateGeminiTarotAnswer(
           ],
 
           generationConfig: {
-            maxOutputTokens: 180,
-            temperature: 0.8
-          }
+  maxOutputTokens: 300,
+  temperature: 0.8,
+  thinkingConfig: {
+    thinkingLevel: "low"
+  }
+}
         })
       });
 
