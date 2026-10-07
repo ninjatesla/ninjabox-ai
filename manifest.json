@@ -1,0 +1,10 @@
+{
+  "name": "NinjaBox Tarot LIVE",
+  "short_name": "NinjaBox Tarot",
+  "start_url": "/live.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000"
+}
