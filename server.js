@@ -679,8 +679,6 @@ function connectTikTok() {
         event.comment
       );
 
-      broadcast(event);
-
       // =========================
       // SORU + KART KUYRUĞA EKLE
       // =========================
