@@ -548,6 +548,7 @@ if (!answer) {
     broadcast({
       type: "tarot_answer",
       username: item.username,
+      questionId: item.id,
       question: item.question,
       cardName: item.card.name,
       image: item.card.image,
