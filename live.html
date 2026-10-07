@@ -519,10 +519,14 @@
       }
 
       answerEl.textContent =
-        data.answer || "";
-      speakAnswer(data.answer);
+         data.answer || "";
 
-      return;
+      pendingVoiceText =
+         data.answer || "";
+
+      voiceTestButton.click();
+
+return;
     }
 
   } catch (error) {
@@ -578,49 +582,54 @@
       );
 
     }
-      const voiceTestButton =
+      let pendingVoiceText = "";
+
+const voiceTestButton =
   document.getElementById(
     "voiceTestButton"
   );
 
 if (voiceTestButton) {
-  voiceTestButton.onclick =
-    () => {
-      if (
-        !("speechSynthesis" in window)
-      ) {
-        alert(
-          "Bu tarayıcı sesli konuşmayı desteklemiyor."
-        );
-        return;
-      }
+  voiceTestButton.onclick = () => {
 
-      window.speechSynthesis.cancel();
-
-      const text =
-        "Merhaba. Ben NinjaBox yapay zeka ses sistemiyim. Ses testi başarıyla çalışıyor.";
-
-      const utterance =
-        new SpeechSynthesisUtterance(
-          text
-        );
-
-      utterance.lang =
-        "tr-TR";
-
-      utterance.rate =
-        0.92;
-
-      utterance.pitch =
-        1.05;
-
-      utterance.volume =
-        1;
-
-      window.speechSynthesis.speak(
-        utterance
+    if (
+      !("speechSynthesis" in window)
+    ) {
+      alert(
+        "Bu tarayıcı sesli konuşmayı desteklemiyor."
       );
-    };
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const text =
+      pendingVoiceText ||
+      "Merhaba. Ben NinjaBox yapay zeka ses sistemiyim. Ses testi başarıyla çalışıyor.";
+
+    const utterance =
+      new SpeechSynthesisUtterance(
+        text
+      );
+
+    utterance.lang =
+      "tr-TR";
+
+    utterance.rate =
+      0.92;
+
+    utterance.pitch =
+      1.05;
+
+    utterance.volume =
+      1;
+
+    window.speechSynthesis.speak(
+      utterance
+    );
+
+    pendingVoiceText = "";
+  };
 }
   </script>
 
