@@ -36,6 +36,98 @@ const questionQueue = [];
 let processingQuestion = false;
 let questionId = 0;
 
+// CHAT filtresi: sohbet, sıra, bedava bakma ve provokasyon mesajlarını
+// Tarot kuyruğuna almadan önce ayıklar. Ses/yanıt akışına dokunmaz.
+const recentQuestionKeys = new Map();
+const DEDUPE_WINDOW_MS = 90 * 1000;
+
+function normalizeTurkishText(value = "") {
+  return String(value)
+    .toLocaleLowerCase("tr-TR")
+    .replace(/[ıİ]/g, "i")
+    .replace(/[ğĞ]/g, "g")
+    .replace(/[üÜ]/g, "u")
+    .replace(/[şŞ]/g, "s")
+    .replace(/[öÖ]/g, "o")
+    .replace(/[çÇ]/g, "c")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasAny(text, patterns) {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function classifyChatMessage(message) {
+  const text = normalizeTurkishText(message);
+  if (!text) return { accept: false, reason: "EMPTY" };
+
+  const freebiePatterns = [
+    /\b(bedava|bele[sş]|ucretsiz|parasiz|hediyesiz)\b/,
+    /\b(kac|kac tane|kaclik) (begeni|like|paylasim|takip)\b/,
+    /\b(begeni|like|paylasim|takip) atsam\b/,
+    /\b(paylasirsam|paylasim yaparsam|takip etsem|begeni yaparsam)\b/,
+    /\b(bakar misin|bakabilir misin|falima bak|tarot bak)\b/
+  ];
+  const freebieContext = hasAny(text, freebiePatterns) &&
+    hasAny(text, [/\b(bedava|bele[sş]|ucretsiz|parasiz|hediyesiz)\b/, /\b(begeni|like|paylasim|takip|hediye|para)\b/]);
+  if (freebieContext) return { accept: false, reason: "FREEBIE_REQUEST" };
+
+  const provocationPatterns = [
+    /\b(sallayabilir misiniz|sallayabilir misin|sallama|sallamasyon)\b/,
+    /\b(kafadan atabilir misiniz|kafadan atiyor|kafadan atiyorsun)\b/,
+    /\b(uyduruyor musunuz|uyduruyorsun|uydurma mi)\b/,
+    /\b(herkese ayni seyi soyluyorsun|herkese ayni seyi soyluyorsunuz)\b/,
+    /\b(bunlari nereden biliyorsun|bunlari nereden biliyorsunuz)\b/,
+    /\b(atabilir misiniz|atabilir misin)\b/
+  ];
+  if (hasAny(text, provocationPatterns)) return { accept: false, reason: "PROVOCATION_TRUST" };
+
+  const queuePatterns = [
+    /\bsira var mi\b/, /\bsirada kac kisi\b/, /\b(tarot )?bekleyen kac kisi\b/,
+    /\bsira bana geldi mi\b/, /\bsira bana gelir mi\b/, /\btarot sirasi\b/,
+    /\bkac kisi kaldi\b/, /\bben sirada miyim\b/, /\bbeni ne zaman okuyacaksin\b/,
+    /\bne zaman sira bana gelecek\b/
+  ];
+  const queueOnly = hasAny(text, queuePatterns);
+
+  // Mesajda gerçek bir Tarot niyeti arıyoruz. mi/mı/mu/mü bitişik yazılsa da
+  // normalize edilmiş metindeki desenler yakalar; ayrıca soru kelimeleri ve
+  // ilişki/iş/eğitim fiilleri kontrol edilir.
+  const questionMarkers = [
+    /\b(mi|mu|m[uü]|m[iı])\b/, /\b(ne|neden|niye|nasil|nasil|nerede|nereye|nerden|nereden|ne zaman|kiminle|kimle|kime|kimin|kac|hangi|hangisi)\b/,
+    /\b(olacak|olur|olur mu|olacak mi|olacak mi|yapar|yapacak|eder|edecek|gelir|gelecek|doner|donecek|arar|arayacak|yazar|yazacak|mesaj atar|sever|seviyor|sevdi|sevdi mi|evlenir|evlenecek|barisir|barisacak|aldatiyor|aldatir|pisman|bulur|bulabilecek|bulabilir|girer|girecek|alinir|kazanir|kazanacak|yerlesir|yerlesecek|terfi alir|basarili olur|engelini acar|engelimi kaldirir|sakliyor|hissediyor|dusunuyor|ozluyor|kiskaniyor)\b/
+  ];
+  const questionShape = hasAny(text, questionMarkers) || /\b[a-z]+(mi|mu|m[iı])\b/.test(text);
+
+  const tarotTopics = [
+    /\b(beni sev|seviyor|seviyor mu|seviyor|ask|iliski|baris|ayril|aldat|ihanet|evli|evlen|eski sevgili|geri don|geri gel|ara|arayacak|mesaj|yazacak|engel|pisman|ozle|kiskan|bulus|gorus|sakliyor|hissediyor|dusunuyor)/,
+    /\b(is|kariyer|meslek|ise gir|is bul|is hayat|basvuru|terfi|patron|sinav|yks|universite|bolum|okul|kazan|yerles|egitim)/,
+    /\b(para|maddi|borc|gelir|kazanc|yatirim|gelecek|hayatim|ne olacak|sonuc|tasini|ev al|araba al)/
+  ];
+  const hasTarotTopic = hasAny(text, tarotTopics);
+
+  // Sadece yakınma/sohbet değil, soru biçimi veya açık bir Tarot soru fiili olmalı.
+  const explicitTarotQuestion = hasTarotTopic && questionShape;
+  if (queueOnly && !explicitTarotQuestion) return { accept: false, reason: "QUEUE_STATUS" };
+  if (!explicitTarotQuestion) return { accept: false, reason: "NOT_A_TAROT_QUESTION" };
+
+  return { accept: true, reason: "TAROT_QUESTION", normalized: text };
+}
+
+function isDuplicateQuestion(username, normalizedQuestion) {
+  const now = Date.now();
+  for (const [key, timestamp] of recentQuestionKeys) {
+    if (now - timestamp > DEDUPE_WINDOW_MS) recentQuestionKeys.delete(key);
+  }
+  const key = `${normalizeTurkishText(username || "anon")}::${normalizedQuestion}`;
+  const previous = recentQuestionKeys.get(key);
+  if (previous && now - previous <= DEDUPE_WINDOW_MS) return true;
+  recentQuestionKeys.set(key, now);
+  return false;
+}
+
 app.get("/", (req, res) => {
   res.json({
     ok: true,
@@ -689,6 +781,32 @@ function connectTikTok() {
         "=>",
         event.comment
       );
+
+      // =========================
+      // MESAJ FILTRESI
+      // =========================
+      const classification = classifyChatMessage(event.comment);
+      if (!classification.accept) {
+        console.log(
+          "FILTER: Mesaj Tarot kuyruğuna alınmadı:",
+          event.username,
+          "=>",
+          event.comment,
+          "| Neden:",
+          classification.reason
+        );
+        return;
+      }
+
+      if (isDuplicateQuestion(event.username, classification.normalized)) {
+        console.log(
+          "FILTER: Tekrarlanan soru atlandı:",
+          event.username,
+          "=>",
+          event.comment
+        );
+        return;
+      }
 
       // =========================
       // SORU + KART KUYRUĞA EKLE
