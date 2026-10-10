@@ -6,7 +6,7 @@ import {
   ControlEvent
 } from "tiktok-live-connector";
 import { drawOneCard } from "./tarotEngine.js";
-import { getLocalTarotAnswer, detectTarotIntent } from "./tarotFallback.js";
+import { getLocalTarotAnswer } from "./tarotFallback.js";
 
 const app = express();
 app.use(express.static("."));
@@ -35,6 +35,8 @@ let tiktokConnected = false;
 const questionQueue = [];
 let processingQuestion = false;
 let questionId = 0;
+let waitingForClientCompletion = null;
+let completionSafetyTimer = null;
 
 // CHAT filtresi: sohbet, sıra, bedava bakma ve provokasyon mesajlarını
 // Tarot kuyruğuna almadan önce ayıklar. Ses/yanıt akışına dokunmaz.
@@ -183,6 +185,26 @@ wss.on("connection", (socket) => {
     })
   );
 
+  socket.on("message", (raw) => {
+    try {
+      const message = JSON.parse(raw.toString());
+      if (message.type === "tarot_finished" &&
+          waitingForClientCompletion !== null &&
+          Number(message.questionId) === Number(waitingForClientCompletion)) {
+        console.log("QUEUE: Ses ve 15 saniyelik ekran süresi tamamlandı:", message.questionId);
+        waitingForClientCompletion = null;
+        if (completionSafetyTimer) {
+          clearTimeout(completionSafetyTimer);
+          completionSafetyTimer = null;
+        }
+        processingQuestion = false;
+        if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+      }
+    } catch (error) {
+      console.error("WebSocket mesajı okunamadı:", error.message);
+    }
+  });
+
   socket.on("close", () => {
     clients.delete(socket);
   });
@@ -194,49 +216,57 @@ function buildTarotPrompt(
   card,
   orientation
 ) {
-  const meaning = orientation === "upright" ? card.upright : card.reversed;
-  const analysis = detectTarotIntent(question);
-  const categoryNames = {
-    ask: "AŞK VE İLİŞKİ", barisma: "BARIŞMA / GERİ DÖNÜŞ / İLETİŞİM",
-    ihanet: "İHANET / GÜVEN", egitim: "EĞİTİM / SINAV / ÜNİVERSİTE",
-    is: "İŞ / KARİYER", para: "PARA / MADDİ DURUM",
-    ayrilik: "AYRILIK", yeniIliski: "YENİ İLİŞKİ",
-    gelecek: "GENEL GELECEK", genel: "GENEL"
-  };
-  const category = categoryNames[analysis.category] || categoryNames.genel;
+  const meaning =
+    orientation === "upright"
+      ? card.upright
+      : card.reversed;
 
   return `
-Sen Ninja Box Tarot canlı yayınında yorum yapan, doğal Türkçe konuşan bir Tarot yorumcususun.
+Sen deneyimli, sezgisel ve geleneksel Tarot yorumcususun.
 
-ZORUNLU SORU ANALİZİ:
-- Kullanıcının gerçek sorusu: ${question}
-- Algılanan kategori: ${category}
-- Alt niyet: ${analysis.intent}
-- Bu kategoriyi değiştirme. Cevabın her cümlesi bu soruya ve kategoriye uygun olsun.
-- Soru üniversite, YKS, sınav, okul, bölüm, tercih veya yerleşmeyle ilgiliyse eğitim yorumu yap; bunu aşk, genel gelecek ya da iş olarak yorumlama.
-- İş bulma, işe alınma, başvuru, terfi veya kariyer sorusuysa iş/kariyer yorumu yap.
-- Para, borç, gelir veya maddi rahatlama sorusuysa maddi durum yorumu yap.
-- Barışma, eski sevgilinin dönmesi, araması, yazması veya engeli kaldırması sorusuysa barışma/iletişim yorumu yap.
-- Aldatma veya sadakat sorularında kartı ihanet kanıtı olarak sunma; kimseyi kanıtsız suçlama. Güven ve iletişim temasını yorumla.
+Canlı yayında çok kısa ve doğal cevaplar veriyorsun.
 
-YORUM KURALLARI:
-- Yalnızca Türkçe, konuşma dilinde, doğal ve sıcak bir cevap ver.
-- 2 kısa cümle kullan; canlı yayında rahatça seslendirilsin.
-- Kartın gerçek anlamını ve düz/ters konumunu temel al; kartın anlamıyla çelişme.
-- Önce soruya doğrudan cevap ver, ardından kartın neden bu yoruma götürdüğünü kısaca açıkla.
-- Olumlu kartı gereksiz yere olumsuzlaştırma; zorlayıcı kartı da sahte umutla yumuşatma. Yine de geleceği kesinmiş gibi anlatma.
-- “Kesin olacak”, “mutlaka dönecek”, “kesin kazanacak” gibi garanti verme. “Kart ... yönünü destekliyor”, “şu an ... teması ağır basıyor” gibi doğal ifadeler kullan.
-- Kartın adını gereksiz yere söyleme, genel geçer boş sözler üretme, aynı kalıbı her soruya uygulama.
-- Sağlık/teşhis/iyileşme, ölüm ve gebelik/bebek tahminleri yapma. Böyle bir soru gelirse tahmin üretme; nazikçe bu konuda Tarot yorumu yapamayacağını söyle.
-- Para veya iş konusunda kesin kazanç/garanti vaat etme.
-- Kullanıcı adını yalnızca doğal geliyorsa kullan.
+Kurallar:
+- Türkçe cevap ver.
+- Soruyu doğrudan yorumla.
+- Kartın klasik Tarot anlamını temel al.
+- Düz/ters konumunu mutlaka dikkate al.
+- Kart anlamını sorunun bağlamına uygula.
+- Genel ve boş cümleler kurma.
+- Korkutucu veya aşırı kesin ifadeler kullanma.
+- "Kesin olacak", "kesin dönecek", "mutlaka gerçekleşecek" gibi garanti ifadeleri kullanma.
+- Soruyu dolandırma.
+- Kart olumluysa olumlu sonucu açıkça söyle.
+- Kart olumsuzsa olumsuz sonucu açıkça söyle.
+- Örneğin "Mehmet'le barışacak mıyım?" sorusunda kart barışmayı destekliyorsa barışma yönünü açıkça söyle.
+- Kart desteklemiyorsa yakın zamanda barışma görünmediğini açıkça söyle.
+- Kullanıcının adını yalnızca doğal ve anlamlı olduğu durumda kullan.
+- Kullanıcı adını tek başına cevap olarak verme.
+- Kullanıcı adı cevabın içeriğinin yerine geçmesin.
+- 1-3 kısa cümle kullan.
+- Cevap canlı yayında seslendirilecek.
+- Fazla açıklama yapma.
 
-Kullanıcı adı: ${username}
-Kart: ${card.name}
-Konum: ${orientation === "upright" ? "Düz" : "Ters"}
-Kartın temel anlamı: ${meaning}
+Kullanıcı:
+${username}
 
-Şimdi kategoriye sadık, soruya özel, kısa ve doğal cevabı yaz. Yalnızca cevap metnini döndür.
+Soru:
+${question}
+
+Kart:
+${card.name}
+
+Kart konumu:
+${orientation === "upright" ? "Düz" : "Ters"}
+
+Kartın temel anlamı:
+${meaning}
+
+Şimdi soruya doğrudan cevap veren,
+kartın anlamını soruyla ilişkilendiren,
+kısa ve doğal bir Tarot yorumu yaz.
+
+Sadece yorumu yaz.
 `;
 }
 
@@ -629,6 +659,19 @@ if (!answer) {
       answer
     );
 
+    waitingForClientCompletion = item.id;
+    if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
+    // Güvenlik: tarayıcı kapanır veya ses bitiş mesajı gelmezse kuyruk kilitlenmesin.
+    completionSafetyTimer = setTimeout(() => {
+      if (Number(waitingForClientCompletion) === Number(item.id)) {
+        console.log("QUEUE: Tamamlama zaman aşımı, kuyruk açılıyor:", item.id);
+        waitingForClientCompletion = null;
+        completionSafetyTimer = null;
+        processingQuestion = false;
+        if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+      }
+    }, 120000);
+
     broadcast({
       type: "tarot_answer",
       username: item.username,
@@ -645,13 +688,13 @@ if (!answer) {
       item.username
     );
   } finally {
-    processingQuestion = false;
-
-    if (questionQueue.length > 0) {
-      setTimeout(
-        processQuestionQueue,
-        250
-      );
+    // Cevap gönderildiyse tarayıcı seslendirmeyi bitirip 15 saniyelik
+    // gösterim süresini tamamlayınca tarot_finished gönderir.
+    if (Number(waitingForClientCompletion) !== Number(item.id)) {
+      processingQuestion = false;
+      if (questionQueue.length > 0) {
+        setTimeout(processQuestionQueue, 250);
+      }
     }
   }
 }

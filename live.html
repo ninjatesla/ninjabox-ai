@@ -84,6 +84,21 @@
       line-height: 1.2;
     }
 
+    .waiting-label {
+      position: absolute;
+      top: 28.2%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      text-align: center;
+      color: #fff;
+      font-size: clamp(17px, 4.5vw, 23px);
+      font-weight: 700;
+      text-shadow: 0 2px 6px #000;
+      z-index: 4;
+      display: none;
+    }
+
     /* =========================
        TAROT KARTI - MERKEZ
        ========================= */
@@ -272,6 +287,8 @@
 
       </div>
 
+      <div id="waitingLabel" class="waiting-label">Yeni soru bekleniyor...</div>
+
     </div>
 
   </div>
@@ -297,6 +314,30 @@
       document.getElementById("chatPanel");
       let activeQuestionId = null;
       let introTimer = null;
+      let displayCleanupTimer = null;
+      let finishSafetyTimer = null;
+      const waitingLabelEl = document.getElementById("waitingLabel");
+
+      function showWaitingScreen() {
+        usernameEl.textContent = "";
+        questionEl.textContent = "";
+        cardEl.style.display = "none";
+        answerEl.textContent = "";
+        waitingLabelEl.style.display = "block";
+      }
+
+      function finishQuestionAfterDisplay(questionId) {
+        if (displayCleanupTimer) clearTimeout(displayCleanupTimer);
+        displayCleanupTimer = setTimeout(() => {
+          // Yalnızca hâlâ aynı soru ekrandaysa temizle.
+          if (Number(activeQuestionId) !== Number(questionId)) return;
+          showWaitingScreen();
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "tarot_finished", questionId }));
+          }
+          displayCleanupTimer = null;
+        }, 15000);
+      }
 
 
     const socketUrl =
@@ -362,8 +403,11 @@
       }
 
     }
-    function speakAnswer(text) {
-      if (!text || !("speechSynthesis" in window)) return;
+    function speakAnswer(text, onFinished) {
+      if (!text || !("speechSynthesis" in window)) {
+        if (onFinished) onFinished();
+        return;
+      }
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = "tr-TR";
@@ -373,7 +417,17 @@
       const voices = window.speechSynthesis.getVoices();
       const turkishVoice = voices.find(v => (v.lang || "").toLowerCase().startsWith("tr"));
       if (turkishVoice) utterance.voice = turkishVoice;
+      let ended = false;
+      const complete = () => {
+        if (ended) return;
+        ended = true;
+        if (onFinished) onFinished();
+      };
+      utterance.onend = complete;
+      utterance.onerror = complete;
       window.speechSynthesis.speak(utterance);
+      // If mobile browser never fires onend, avoid freezing the queue forever.
+      if (onFinished) finishSafetyTimer = setTimeout(complete, 90000);
     }
 
 
@@ -415,6 +469,9 @@
 
     if (data.type === "tarot_start") {
       activeQuestionId = data.questionId;
+      waitingLabelEl.style.display = "none";
+      if (displayCleanupTimer) { clearTimeout(displayCleanupTimer); displayCleanupTimer = null; }
+      if (finishSafetyTimer) { clearTimeout(finishSafetyTimer); finishSafetyTimer = null; }
 
       if (introTimer) {
         clearTimeout(introTimer);
@@ -453,10 +510,12 @@
         introTimer = null;
       }
 
-      answerEl.textContent =
-         data.answer || "";
+      answerEl.textContent = data.answer || "";
 
-      speakAnswer(data.answer || "");
+      speakAnswer(data.answer || "", () => {
+        if (finishSafetyTimer) { clearTimeout(finishSafetyTimer); finishSafetyTimer = null; }
+        finishQuestionAfterDisplay(data.questionId);
+      });
       return;
     }
 
