@@ -99,16 +99,24 @@ function classifyChatMessage(message) {
   // ilişki/iş/eğitim fiilleri kontrol edilir.
   const questionMarkers = [
     /\b(mi|mu|m[uü]|m[iı])\b/, /\b(ne|neden|niye|nasil|nasil|nerede|nereye|nerden|nereden|ne zaman|kiminle|kimle|kime|kimin|kac|hangi|hangisi)\b/,
-    /\b(olacak|olur|olur mu|olacak mi|olacak mi|yapar|yapacak|eder|edecek|gelir|gelecek|doner|donecek|arar|arayacak|yazar|yazacak|mesaj atar|sever|seviyor|sevdi|sevdi mi|evlenir|evlenecek|barisir|barisacak|aldatiyor|aldatir|pisman|bulur|bulabilecek|bulabilir|girer|girecek|alinir|kazanir|kazanacak|yerlesir|yerlesecek|terfi alir|basarili olur|engelini acar|engelimi kaldirir|sakliyor|hissediyor|dusunuyor|ozluyor|kiskaniyor)\b/
+    /\b(olacak|olur|olur mu|olacak mi|olacak mi|yapar|yapacak|eder|edecek|gelir|gelecek|doner|donecek|arar|arayacak|yazar|yazacak|mesaj atar|sever|seviyor|sevdi|sevdi mi|evlenir|evlenecek|barisir|barisacak|aldatiyor|aldatir|pisman|bulur|bulabilecek|bulabilir|girer|girecek|alinir|kazanir|kazanacak|yerlesir|yerlesecek|terfi alir|basarili olur|engelini acar|engelimi kaldirir|sakliyor|hissediyor|dusunuyor|ozluyor|kiskaniyor|alabilecek|alabilir|satilir|satilabilir|satabilecek|sahip olur|sahibi olur)\b/
   ];
   const questionShape = hasAny(text, questionMarkers) || /\b[a-z]+(mi|mu|m[iı])\b/.test(text);
 
   const tarotTopics = [
-    /\b(beni sev|seviyor|seviyor mu|seviyor|ask|iliski|baris|ayril|aldat|ihanet|evli|evlen|eski sevgili|geri don|geri gel|ara|arayacak|mesaj|yazacak|engel|pisman|ozle|kiskan|bulus|gorus|sakliyor|hissediyor|dusunuyor)/,
+    /\b(beni sev|seviyor|ask|iliski|baris|ayril|aldat|ihanet|evli|evlen|eski sevgili|geri don|geri gel|ara|arayacak|mesaj|yazacak|engel|pisman|ozle|kiskan|bulus|gorus|sakliyor|hissediyor|dusunuyor)/,
     /\b(is|kariyer|meslek|ise gir|is bul|is hayat|basvuru|terfi|patron|sinav|yks|universite|bolum|okul|kazan|yerles|egitim)/,
-    /\b(para|maddi|borc|gelir|kazanc|yatirim|gelecek|hayatim|ne olacak|sonuc|tasini|ev al|araba al)/
+    /\b(para|maddi|borc|gelir|kazanc|yatirim|gelecek|hayatim|ne olacak|sonuc|tasini)/
   ];
-  const hasTarotTopic = hasAny(text, tarotTopics);
+
+  // Mal & mülk: ev, villa, araba, arsa/tarla ve pahalı ürün alım-satımı.
+  // Kişinin kendisi veya yakını için sorduğu soruları da kapsar.
+  const propertyTopics = [
+    /\b(ev|villa|daire|konut|araba|otomobil|arac|iphone|telefon|arsa|arsam|tarla|tarlam|tapu|mal mulk|ev sahibi|arac sahibi)\b/,
+    /\b(alabilecek|alabilir|almak|alacak|alir|satilir|satabilecek|satabilir|satmak|satar|sahip olacak|ev sahibi olacak)\b/
+  ];
+  const hasTarotTopic =
+    hasAny(text, tarotTopics) || hasAny(text, propertyTopics);
 
   // Sadece yakınma/sohbet değil, soru biçimi veya açık bir Tarot soru fiili olmalı.
   const explicitTarotQuestion = hasTarotTopic && questionShape;
