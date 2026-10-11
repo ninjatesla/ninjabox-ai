@@ -30,6 +30,7 @@
     .relationship-card .card-side{font-size:9px;opacity:.9;margin-top:2px}
     .orientation,.answer,.chat-panel{display:none!important}.status{position:absolute;bottom:2%;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:10px;white-space:nowrap;z-index:8}
     .controls{position:fixed;bottom:5%;left:5%;right:5%;display:flex;gap:10px;z-index:9999}.control-button{flex:1;min-width:0;min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(0,0,0,.82);color:#fff;font-size:clamp(12px,3.2vw,15px);font-weight:700;padding:10px 6px}
+    .reward-toast{display:none;position:absolute;left:5%;right:5%;bottom:13%;padding:12px 14px;border:1px solid rgba(255,215,0,.75);border-radius:14px;background:rgba(0,0,0,.88);color:#ffe58a;text-align:center;font-weight:700;font-size:clamp(14px,3.6vw,19px);z-index:20;text-shadow:0 1px 3px #000}
   </style>
 </head>
 <body>
@@ -42,6 +43,7 @@
     <audio id="burcIntroAudio" src="/burc.mp3" preload="auto"></audio>
     <div class="overlay">
       <div id="status" class="status">NinjaBox · Sesli yorum aktif</div>
+      <div id="rewardToast" class="reward-toast"></div>
       <div id="orientation" class="orientation">TAROT</div>
       <img id="card" class="card" src="" alt="Tarot Kartı" style="display:none;">
       <div id="relationshipCards" class="relationship-cards">
@@ -71,6 +73,8 @@
   const orientationEl=document.getElementById("orientation");
   const answerEl=document.getElementById("answer");
   const waitingLabelEl=document.getElementById("waitingLabel");
+  const rewardToastEl=document.getElementById("rewardToast");
+  let rewardToastTimer=null;
   const backgroundVideo=document.getElementById("backgroundVideo");
   const burcIntroAudio=document.getElementById("burcIntroAudio");
   let activeQuestionId=null, displayCleanupTimer=null, finishSafetyTimer=null;
@@ -141,6 +145,21 @@
     try{
       const data=JSON.parse(event.data);
       console.log("LIVE EVENT:",data);
+      if(data.type==="free_tarot_prompt"){
+        const promptText=data.isModerator
+          ? `${data.username||"Moderatör"}, ${Number(data.threshold||30000).toLocaleString("tr-TR")} beğeni ödülün hazır. Ücretsiz Tarot için sorunu sohbete yaz.`
+          : `${data.username||"Dostum"}, ücretsiz Tarot hakkın hazır. Yorum için sorunu sohbete yaz.`;
+        // Bildirim mevcut Tarot sesini veya aktif ekranı kesmesin.
+        rewardToastEl.textContent=promptText;
+        rewardToastEl.style.display="block";
+        if(rewardToastTimer)clearTimeout(rewardToastTimer);
+        rewardToastTimer=setTimeout(()=>{rewardToastEl.style.display="none";rewardToastTimer=null;},15000);
+        return;
+      }
+      if(data.type==="free_tarot_queued"){
+        console.log("ÜCRETSİZ TAROT SORUSU KUYRUĞA ALINDI:",data.username);
+        return;
+      }
       if(data.type==="tarot_start"){
         activeQuestionId=data.questionId; setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         waitingLabelEl.style.display="none";
