@@ -8,6 +8,7 @@ import {
 import { drawOneCard } from "./tarotEngine.js";
 import { getLocalTarotAnswer } from "./tarotFallback.js";
 import { createMagicMessage } from "./magicMessageEngine.js";
+import { parseBurcInput, generateBurcCommentary } from "./burcEngine.js";
 
 const app = express();
 app.use(express.static("."));
@@ -38,6 +39,8 @@ let processingQuestion = false;
 let questionId = 0;
 let waitingForClientCompletion = null;
 let completionSafetyTimer = null;
+let activeBurcRequest = null;
+let burcInputTimer = null;
 
 // CHAT filtresi: sohbet, sıra, bedava bakma ve provokasyon mesajlarını
 // Tarot kuyruğuna almadan önce ayıklar. Ses/yanıt akışına dokunmaz.
@@ -197,11 +200,15 @@ wss.on("connection", (socket) => {
   socket.on("message", (raw) => {
     try {
       const message = JSON.parse(raw.toString());
-      if ((message.type === "tarot_finished" || message.type === "magic_finished") &&
+      if ((message.type === "tarot_finished" || message.type === "magic_finished" || message.type === "burc_finished") &&
           waitingForClientCompletion !== null &&
           Number(message.questionId) === Number(waitingForClientCompletion)) {
         console.log("QUEUE: Ses ve 15 saniyelik ekran süresi tamamlandı:", message.questionId);
         waitingForClientCompletion = null;
+        if (message.type === "burc_finished") {
+          if (burcInputTimer) { clearTimeout(burcInputTimer); burcInputTimer = null; }
+          activeBurcRequest = null;
+        }
         if (completionSafetyTimer) {
           clearTimeout(completionSafetyTimer);
           completionSafetyTimer = null;
@@ -601,6 +608,48 @@ async function generateTarotAnswer(
   );
 }
 
+async function resolveBurcRequest(session, parsed) {
+  if (!session || session.resolved || Number(waitingForClientCompletion) !== Number(session.id)) return;
+  session.resolved = true;
+  if (burcInputTimer) { clearTimeout(burcInputTimer); burcInputTimer = null; }
+
+  let answer;
+  let source = "no-input";
+  if (!parsed) {
+    answer = `${session.username}, burç bilgini bu kez alamadım. Yorumunu hazırlayabilmem için burcunu sohbete yazabilirsin. Bir sonraki turda yeniden deneyebiliriz.`;
+  } else {
+    try {
+      const result = await generateBurcCommentary({
+        username: session.username,
+        sunSign: parsed.sunSign,
+        risingSign: parsed.risingSign,
+        geminiApiKey: GEMINI_API_KEY,
+        geminiModels: GEMINI_MODELS,
+        openaiApiKey: OPENAI_API_KEY,
+        openaiModel: OPENAI_MODEL
+      });
+      answer = result.answer;
+      source = result.source;
+      console.log("BURÇ: Efemeris yorum kaynağı:", source, "| Güneş:", parsed.sunSign, "| Yükselen:", parsed.risingSign || "belirtilmedi");
+    } catch (error) {
+      console.error("BURÇ: Yorum oluşturulamadı:", error.message || error);
+      answer = `${session.username}, ${parsed.sunSign} burcunun temel teması kendi güçlü yönlerini fark etmek ve önceliklerini netleştirmek. İlişkilerde açık iletişim kur, iş hedeflerinde küçük ve düzenli adımlara odaklan. Bu yorum genel astrolojik bir çerçevedir; kesin bir gelecek tahmini değildir.`;
+      source = "safe-fallback";
+    }
+  }
+
+  if (Number(waitingForClientCompletion) !== Number(session.id)) return;
+  broadcast({
+    type: "burc_answer",
+    questionId: session.id,
+    username: session.username,
+    sunSign: parsed?.sunSign || null,
+    risingSign: parsed?.risingSign || null,
+    answer,
+    source
+  });
+}
+
 async function processQuestionQueue() {
   if (processingQuestion) return;
 
@@ -618,6 +667,38 @@ async function processQuestionQueue() {
   );
 
   try {
+    if (item.kind === "burc") {
+      activeBurcRequest = {
+        id: item.id,
+        username: item.username,
+        nickname: item.nickname,
+        startedAt: Date.now(),
+        resolved: false
+      };
+      waitingForClientCompletion = item.id;
+      broadcast({ type: "burc_start", questionId: item.id, username: item.username });
+      if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
+      completionSafetyTimer = setTimeout(() => {
+        if (Number(waitingForClientCompletion) === Number(item.id)) {
+          console.log("QUEUE: Burç güvenlik zaman aşımı, kuyruk açılıyor:", item.id);
+          waitingForClientCompletion = null;
+          completionSafetyTimer = null;
+          activeBurcRequest = null;
+          if (burcInputTimer) { clearTimeout(burcInputTimer); burcInputTimer = null; }
+          processingQuestion = false;
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+        }
+      }, 180000);
+      if (burcInputTimer) clearTimeout(burcInputTimer);
+      burcInputTimer = setTimeout(() => {
+        if (activeBurcRequest && Number(activeBurcRequest.id) === Number(item.id) && !activeBurcRequest.resolved) {
+          resolveBurcRequest(activeBurcRequest, null).catch(error => console.error("BURÇ zaman aşımı yorumu hatası:", error.message));
+        }
+      }, 60000);
+      console.log("BURÇ: Bilgi bekleniyor (60 sn):", item.username, "ID:", item.id);
+      return;
+    }
+
     if (item.kind === "magic") {
       const magic = createMagicMessage(item.username);
       broadcast({
@@ -856,6 +937,45 @@ function connectTikTok() {
         "=>",
         event.comment
       );
+
+      // =========================
+      // AKTİF BURÇ OTURUMU: yalnızca sıradaki kişinin kendi mesajını kabul et
+      // =========================
+      if (activeBurcRequest && !activeBurcRequest.resolved) {
+        const currentUser = normalizeTurkishText(event.username || event.nickname || "");
+        const expectedUser = normalizeTurkishText(activeBurcRequest.username || activeBurcRequest.nickname || "");
+        if (currentUser && expectedUser && currentUser === expectedUser) {
+          const parsedBurc = parseBurcInput(event.comment);
+          if (parsedBurc) {
+            console.log("BURÇ: İzleyici bilgisi alındı:", activeBurcRequest.username, parsedBurc.sunSign, parsedBurc.risingSign || "yükselen yok");
+            resolveBurcRequest(activeBurcRequest, parsedBurc).catch(error => console.error("BURÇ cevap hatası:", error.message || error));
+            return;
+          }
+          if (normalizeTurkishText(event.comment) === "burc") {
+            console.log("BURÇ: Aynı izleyicinin tekrar tetiklemesi atlandı:", activeBurcRequest.username);
+            return;
+          }
+        }
+      }
+
+      // =========================
+      // BURÇ TEST TETİĞİ
+      // Sohbete yalnızca "burç" yazılması Burç motorunu kuyruğa alır.
+      // =========================
+      if (normalizeTurkishText(event.comment) === "burc") {
+        const item = {
+          id: ++questionId,
+          kind: "burc",
+          username: event.username || event.nickname || "izleyici",
+          nickname: event.nickname,
+          question: "Burç yorumu",
+          priority: false
+        };
+        questionQueue.push(item);
+        console.log("QUEUE: Burç yorumu eklendi:", item.username, "| Bekleyen:", questionQueue.length);
+        processQuestionQueue();
+        return;
+      }
 
       // =========================
       // SİHİRLİ MESAJ TEST TETİĞİ
