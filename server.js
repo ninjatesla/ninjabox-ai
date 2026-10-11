@@ -9,7 +9,7 @@ import { drawOneCard } from "./tarotEngine.js";
 import { getLocalTarotAnswer } from "./tarotFallback.js";
 import { createMagicMessage } from "./magicMessageEngine.js";
 import { parseBurcInput, generateBurcCommentary } from "./burcEngine.js";
-import { createThreeCardReading } from "./3kart.js";
+import { createThreeCardReading, pickThreeCards } from "./3kart.js";
 
 const app = express();
 app.use(express.static("."));
@@ -734,19 +734,25 @@ async function processQuestionQueue() {
       broadcast({ type: "threecard_start", questionId: item.id, username: item.username });
       let reading = null;
       try {
-        reading = await Promise.race([
-          createThreeCardReading({ username: item.username, question: item.question || "" }),
-          new Promise((resolve) => setTimeout(() => resolve(null), 12000))
-        ]);
+        // Motorun AI denemeleri 12 saniyeyi aşabilir. Erken kesmek kartları
+        // boş gönderip ekranda kırık görsel oluşmasına neden oluyordu.
+        reading = await createThreeCardReading({ username: item.username, question: item.question || "" });
       } catch (error) {
         console.error("3 KART: Motor hatası:", error.message || error);
+        const cards = pickThreeCards();
+        reading = {
+          cards,
+          answer: `${item.username}, üç kartın mesajı geçmişten gelen etkileri, şu anki durumu ve önündeki olası yönü birlikte değerlendirmek. Bu kesin bir gelecek tahmini değil; sakin kalıp dengeli bir adım atman yararlı olabilir.`,
+          source: "safe-fallback"
+        };
       }
 
-      if (!reading) {
+      if (!reading || !Array.isArray(reading.cards) || reading.cards.length !== 3) {
+        const cards = pickThreeCards();
         reading = {
-          cards: [],
-          answer: `${item.username}, üç kart açılımını şu anda hazırlayamadım. Biraz sonra yeniden deneyebiliriz.`,
-          source: "timeout-fallback"
+          cards,
+          answer: `${item.username}, geçmişin etkisini, bugünkü durumunu ve olası yönünü birlikte ele alalım. Kartlar kesin gelecek bilgisi vermez; kararlarını değerlendirirken dengeli ve somut adımlara odaklan.`,
+          source: "safe-fallback"
         };
       }
 

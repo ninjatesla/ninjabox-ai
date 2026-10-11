@@ -34,7 +34,6 @@
   <div class="live">
     <video id="backgroundVideo" class="background-video" src="/tarot.mp4" autoplay muted loop playsinline></video>
     <audio id="burcIntroAudio" src="/burc.mp3" preload="auto"></audio>
-    <audio id="threeCardIntroAudio" src="/3kart.mp3" preload="auto"></audio>
     <div class="overlay">
       <div id="status" class="status">NinjaBox · Sesli yorum aktif</div>
       <div id="orientation" class="orientation">TAROT</div>
@@ -60,7 +59,6 @@
   const waitingLabelEl=document.getElementById("waitingLabel");
   const backgroundVideo=document.getElementById("backgroundVideo");
   const burcIntroAudio=document.getElementById("burcIntroAudio");
-  const threeCardIntroAudio=document.getElementById("threeCardIntroAudio");
   let activeQuestionId=null, displayCleanupTimer=null, finishSafetyTimer=null;
   const socket=new WebSocket("wss://ninjabox-ai-production.up.railway.app");
 
@@ -112,12 +110,7 @@
     const promise=burcIntroAudio.play();
     if(promise && typeof promise.catch==="function") promise.catch(speakPrompt);
   }
-  function playThreeCardIntro(){
-    if(!threeCardIntroAudio)return;
-    threeCardIntroAudio.pause(); threeCardIntroAudio.currentTime=0;
-    const promise=threeCardIntroAudio.play();
-    if(promise && typeof promise.catch==="function") promise.catch(()=>{});
-  }
+  function playThreeCardIntro(){ setBackground("3kart.mp4"); }
 
   socket.onopen=()=>{answerEl.textContent="Tarot LIVE hazır. Sorunu sohbete yaz...";};
   socket.onmessage=(event)=>{
@@ -193,10 +186,9 @@
       }
       if(data.type==="threecard_answer"){
         if(Number(data.questionId)!==Number(activeQuestionId))return;
-        if(threeCardIntroAudio){threeCardIntroAudio.pause();threeCardIntroAudio.currentTime=0;}
+        setBackground("tarot.mp4");
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
-        if(threeCardIntroAudio){threeCardIntroAudio.pause();threeCardIntroAudio.currentTime=0;}
         cardEl.style.display="none"; waitingLabelEl.style.display="none";
         usernameEl.textContent=data.username?"@"+data.username:"";
         questionEl.textContent="ÜÇ KART AÇILIMI";
