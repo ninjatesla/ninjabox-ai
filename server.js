@@ -7,6 +7,7 @@ import {
 } from "tiktok-live-connector";
 import { drawOneCard } from "./tarotEngine.js";
 import { getLocalTarotAnswer } from "./tarotFallback.js";
+import { createMagicMessage } from "./magicMessageEngine.js";
 
 const app = express();
 app.use(express.static("."));
@@ -196,7 +197,7 @@ wss.on("connection", (socket) => {
   socket.on("message", (raw) => {
     try {
       const message = JSON.parse(raw.toString());
-      if (message.type === "tarot_finished" &&
+      if ((message.type === "tarot_finished" || message.type === "magic_finished") &&
           waitingForClientCompletion !== null &&
           Number(message.questionId) === Number(waitingForClientCompletion)) {
         console.log("QUEUE: Ses ve 15 saniyelik ekran süresi tamamlandı:", message.questionId);
@@ -611,10 +612,42 @@ async function processQuestionQueue() {
 
   console.log(
     "QUEUE: İşleniyor:",
-    item.username,
+    item.kind === "magic" ? "SİHİRLİ MESAJ" : item.username,
     "=>",
-    item.question
+    item.question || "Sihirli Mesaj"
   );
+
+  try {
+    if (item.kind === "magic") {
+      const magic = createMagicMessage(item.username);
+      broadcast({
+        type: "magic_start",
+        questionId: item.id,
+        username: item.username
+      });
+
+      waitingForClientCompletion = item.id;
+      if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
+      completionSafetyTimer = setTimeout(() => {
+        if (Number(waitingForClientCompletion) === Number(item.id)) {
+          console.log("QUEUE: Sihirli Mesaj zaman aşımı, kuyruk açılıyor:", item.id);
+          waitingForClientCompletion = null;
+          completionSafetyTimer = null;
+          processingQuestion = false;
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+        }
+      }, 120000);
+
+      broadcast({
+        type: "magic_answer",
+        questionId: item.id,
+        username: item.username,
+        answer: magic.answer
+      });
+      console.log("MAGIC: Sihirli Mesaj kuyruğa gönderildi:", item.username, magic.cardId, magic.orientation);
+      return;
+    }
+
     broadcast({
     type: "tarot_start",
     questionId: item.id,
@@ -626,7 +659,6 @@ async function processQuestionQueue() {
     meaning: item.meaning
   });
 
-  try {
     console.log(
       "AI: Tarot yorumu hazırlanıyor..."
     );
@@ -824,6 +856,25 @@ function connectTikTok() {
         "=>",
         event.comment
       );
+
+      // =========================
+      // SİHİRLİ MESAJ TEST TETİĞİ
+      // Sohbete yalnızca "hediye" yazılması özel mesajı kuyruğa alır.
+      // =========================
+      if (normalizeTurkishText(event.comment) === "hediye") {
+        const item = {
+          id: ++questionId,
+          kind: "magic",
+          username: event.username || event.nickname || "izleyici",
+          nickname: event.nickname,
+          question: "Sihirli Mesaj",
+          priority: false
+        };
+        questionQueue.push(item);
+        console.log("QUEUE: Sihirli Mesaj eklendi:", item.username, "| Bekleyen:", questionQueue.length);
+        processQuestionQueue();
+        return;
+      }
 
       // =========================
       // MESAJ FILTRESI
