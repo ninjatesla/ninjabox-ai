@@ -87,14 +87,20 @@
       displayCleanupTimer=null;
     },15000);
   }
+  let lastTurkishVoiceName="";
   function speakAnswer(text,onFinished){
     if(!text || !("speechSynthesis" in window)){if(onFinished)onFinished();return;}
     window.speechSynthesis.cancel();
     const utterance=new SpeechSynthesisUtterance(text);
-    utterance.lang="tr-TR"; utterance.rate=.98; utterance.pitch=1.05; utterance.volume=1;
+    utterance.lang="tr-TR";
     const voices=window.speechSynthesis.getVoices();
-    const turkishVoice=voices.find(v=>(v.lang||"").toLowerCase().startsWith("tr"));
-    if(turkishVoice) utterance.voice=turkishVoice;
+    const turkishVoices=voices.filter(v=>(v.lang||"").toLowerCase().startsWith("tr"));
+    let voicePool=turkishVoices.length>1?turkishVoices:voices.filter(v=>(v.lang||"").toLowerCase().startsWith("tr-tr"));
+    if(voicePool.length>1){let choices=voicePool.filter(v=>v.name!==lastTurkishVoiceName);if(!choices.length)choices=voicePool;utterance.voice=choices[Math.floor(Math.random()*choices.length)];lastTurkishVoiceName=utterance.voice.name;}
+    else if(voicePool.length===1)utterance.voice=voicePool[0];
+    utterance.rate=[0.94,0.98,1.02,1.05][Math.floor(Math.random()*4)];
+    utterance.pitch=[0.94,1.0,1.04,1.08][Math.floor(Math.random()*4)];
+    utterance.volume=1;
     let ended=false;
     const complete=()=>{if(ended)return;ended=true;if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}if(onFinished)onFinished();};
     utterance.onend=complete; utterance.onerror=complete;
@@ -102,13 +108,15 @@
     if(onFinished) finishSafetyTimer=setTimeout(complete,90000);
   }
   function playBurcIntro(username){
-    const prompt=`${username || "İzleyici"}, burç yorumunu hazırlayalım. Burcunu ve biliyorsan yükselen burcunu sohbete yaz. Örneğin Aslan, yükselen Terazi. Yükselenini bilmiyorsan yalnızca burcunu yazabilirsin.`;
-    const speakPrompt=()=>speakAnswer(prompt);
-    if(!burcIntroAudio){speakPrompt();return;}
-    burcIntroAudio.pause(); burcIntroAudio.currentTime=0;
-    burcIntroAudio.onended=speakPrompt; burcIntroAudio.onerror=speakPrompt;
-    const promise=burcIntroAudio.play();
-    if(promise && typeof promise.catch==="function") promise.catch(speakPrompt);
+    const prompts=[
+      `${username||"İzleyici"}, burcunu yaz; yükselenini biliyorsan onu da ekle, yorumunu hemen hazırlayalım.`,
+      `Sıra sende ${username||""}. Güneş burcunu sohbete yaz, yükselenini biliyorsan yanına ekle.`,
+      `${username||"Dostum"}, burç yorumuna geçiyoruz. Burcunu ve varsa yükselenini gönder.`,
+      `Hangi burçsun ${username||""}? Burcunu yaz, yükselenini biliyorsan onu da belirt.`,
+      `Şimdi gökyüzü yorumunu hazırlayalım ${username||""}. Burcunu yazman yeterli; yükselenini biliyorsan onu da ekleyebilirsin.`
+    ];
+    if(burcIntroAudio){burcIntroAudio.pause();burcIntroAudio.currentTime=0;}
+    speakAnswer(prompts[Math.floor(Math.random()*prompts.length)]);
   }
   function playThreeCardIntro(){ setBackground("3kart.mp4"); }
 
