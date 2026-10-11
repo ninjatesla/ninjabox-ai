@@ -22,6 +22,12 @@
     .three-card .position{font-size:clamp(10px,2.5vw,13px);font-weight:bold;margin-bottom:4px}
     .three-card .card-name{font-size:clamp(11px,2.8vw,15px);font-weight:bold;line-height:1.15;margin-top:4px}
     .three-card .orientation{font-size:10px;opacity:.9;margin-top:2px}
+    .relationship-cards{position:absolute;top:28%;left:1.5%;right:1.5%;display:none;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;z-index:4}
+    .relationship-card{min-width:0;text-align:center;color:#fff;text-shadow:0 2px 5px #000}
+    .relationship-card img{width:100%;height:min(22vh,175px);object-fit:contain;border-radius:6px;filter:drop-shadow(0 5px 8px #000)}
+    .relationship-card .position-label{font-size:clamp(8px,2vw,11px);font-weight:bold;line-height:1.1;min-height:23px;margin-bottom:3px}
+    .relationship-card .card-name{font-size:clamp(9px,2.2vw,12px);font-weight:bold;line-height:1.1;margin-top:3px;overflow-wrap:anywhere}
+    .relationship-card .card-side{font-size:9px;opacity:.9;margin-top:2px}
     .orientation,.answer,.chat-panel{display:none!important}.status{position:absolute;bottom:2%;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:10px;white-space:nowrap;z-index:8}
     .controls{position:fixed;bottom:5%;left:5%;right:5%;display:flex;gap:10px;z-index:9999}.control-button{flex:1;min-width:0;min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(0,0,0,.82);color:#fff;font-size:clamp(12px,3.2vw,15px);font-weight:700;padding:10px 6px}
   </style>
@@ -38,6 +44,13 @@
       <div id="status" class="status">NinjaBox · Sesli yorum aktif</div>
       <div id="orientation" class="orientation">TAROT</div>
       <img id="card" class="card" src="" alt="Tarot Kartı" style="display:none;">
+      <div id="relationshipCards" class="relationship-cards">
+        <div class="relationship-card"><div class="position-label">DUYGULAR</div><img id="relationshipCardImage0" src="" alt=""><div class="card-name" id="relationshipCardName0"></div><div class="card-side" id="relationshipCardSide0"></div></div>
+        <div class="relationship-card"><div class="position-label">DÜŞÜNCELER</div><img id="relationshipCardImage1" src="" alt=""><div class="card-name" id="relationshipCardName1"></div><div class="card-side" id="relationshipCardSide1"></div></div>
+        <div class="relationship-card"><div class="position-label">GİZLİ DİNAMİKLER</div><img id="relationshipCardImage2" src="" alt=""><div class="card-name" id="relationshipCardName2"></div><div class="card-side" id="relationshipCardSide2"></div></div>
+        <div class="relationship-card"><div class="position-label">ENGEL</div><img id="relationshipCardImage3" src="" alt=""><div class="card-name" id="relationshipCardName3"></div><div class="card-side" id="relationshipCardSide3"></div></div>
+        <div class="relationship-card"><div class="position-label">OLASI YÖN</div><img id="relationshipCardImage4" src="" alt=""><div class="card-name" id="relationshipCardName4"></div><div class="card-side" id="relationshipCardSide4"></div></div>
+      </div>
       <div id="threeCards" class="three-cards">
         <div class="three-card"><div class="position">GEÇMİŞ</div><img id="threeCardImage0" src="" alt=""><div class="card-name" id="threeCardName0"></div><div class="orientation" id="threeCardOrientation0"></div></div>
         <div class="three-card"><div class="position">ŞİMDİ</div><img id="threeCardImage1" src="" alt=""><div class="card-name" id="threeCardName1"></div><div class="orientation" id="threeCardOrientation1"></div></div>
@@ -54,6 +67,7 @@
   const questionEl=document.getElementById("question");
   const cardEl=document.getElementById("card");
   const threeCardsEl=document.getElementById("threeCards");
+  const relationshipCardsEl=document.getElementById("relationshipCards");
   const orientationEl=document.getElementById("orientation");
   const answerEl=document.getElementById("answer");
   const waitingLabelEl=document.getElementById("waitingLabel");
@@ -73,6 +87,7 @@
     if(playPromise && typeof playPromise.catch==="function") playPromise.catch(()=>{});
   }
   function hideThreeCards(){if(threeCardsEl)threeCardsEl.style.display="none";}
+  function hideRelationshipCards(){if(relationshipCardsEl)relationshipCardsEl.style.display="none";}
   function showWaitingScreen(){
     usernameEl.textContent=""; questionEl.textContent=""; cardEl.style.display="none";
     hideThreeCards(); answerEl.textContent=""; waitingLabelEl.style.display="block";
@@ -82,7 +97,8 @@
     displayCleanupTimer=setTimeout(()=>{
       if(Number(activeQuestionId)!==Number(questionId)) return;
       showWaitingScreen();
-      if(finishType==="magic_finished" || finishType==="burc_finished" || finishType==="threecard_finished") setBackground("tarot.mp4");
+      if(finishType==="magic_finished" || finishType==="burc_finished" || finishType==="threecard_finished" || finishType==="iliski_finished") setBackground("tarot.mp4");
+      if(finishType==="iliski_finished") hideRelationshipCards();
       if(socket.readyState===WebSocket.OPEN) socket.send(JSON.stringify({type:finishType,questionId}));
       displayCleanupTimer=null;
     },15000);
@@ -126,7 +142,7 @@
       const data=JSON.parse(event.data);
       console.log("LIVE EVENT:",data);
       if(data.type==="tarot_start"){
-        activeQuestionId=data.questionId; setBackground("tarot.mp4"); hideThreeCards();
+        activeQuestionId=data.questionId; setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         waitingLabelEl.style.display="none";
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -144,7 +160,7 @@
         return;
       }
       if(data.type==="burc_start"){
-        activeQuestionId=data.questionId; setBackground("tarot.mp4"); hideThreeCards();
+        activeQuestionId=data.questionId; setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         if(burcIntroAudio){burcIntroAudio.pause();burcIntroAudio.currentTime=0;}
@@ -169,7 +185,7 @@
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         waitingLabelEl.style.display="none";
         usernameEl.textContent=data.username?"@"+data.username:"";
-        questionEl.textContent=""; cardEl.style.display="none"; hideThreeCards(); answerEl.textContent="";
+        questionEl.textContent=""; cardEl.style.display="none"; hideThreeCards(); hideRelationshipCards(); answerEl.textContent="";
         setBackground("sihirli.mp4");
         return;
       }
@@ -178,10 +194,45 @@
         speakAnswer(data.answer||"",()=>{setBackground("tarot.mp4");finishItemAfterDisplay(data.questionId,"magic_finished");});
         return;
       }
+      if(data.type==="iliski_start"){
+        activeQuestionId=data.questionId;
+        hideThreeCards(); hideRelationshipCards();
+        if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
+        if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
+        waitingLabelEl.style.display="none";
+        usernameEl.textContent=data.username?"@"+data.username:"";
+        questionEl.textContent="İLİŞKİ AÇILIMI HAZIRLANIYOR";
+        cardEl.style.display="none"; answerEl.textContent="";
+        setBackground("iliski.mp4");
+        return;
+      }
+      if(data.type==="iliski_answer"){
+        if(Number(data.questionId)!==Number(activeQuestionId))return;
+        if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
+        if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
+        cardEl.style.display="none"; hideThreeCards(); waitingLabelEl.style.display="none";
+        usernameEl.textContent=data.username?"@"+data.username:"";
+        questionEl.textContent="NINJABOX İLİŞKİ AÇILIMI";
+        const cards=Array.isArray(data.cards)?data.cards:[];
+        cards.slice(0,5).forEach((card,index)=>{
+          const image=document.getElementById("relationshipCardImage"+index);
+          const name=document.getElementById("relationshipCardName"+index);
+          const side=document.getElementById("relationshipCardSide"+index);
+          image.src="/"+(card.image||"");
+          image.alt=card.name||"İlişki tarot kartı";
+          name.textContent=card.name||"";
+          side.textContent=card.orientation==="reversed"?"TERS":"DÜZ";
+        });
+        relationshipCardsEl.style.display="grid";
+        answerEl.textContent=data.answer||"";
+        speakAnswer(data.answer||"",()=>finishItemAfterDisplay(data.questionId,"iliski_finished"));
+        return;
+      }
+
       if(data.type==="threecard_start"){
         activeQuestionId=data.questionId;
         setBackground("tarot.mp4");
-        hideThreeCards();
+        hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         waitingLabelEl.style.display="none";

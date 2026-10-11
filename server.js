@@ -10,6 +10,7 @@ import { getLocalTarotAnswer } from "./tarotFallback.js";
 import { createMagicMessage } from "./magicMessageEngine.js";
 import { parseBurcInput, generateBurcCommentary } from "./burcEngine.js";
 import { createThreeCardReading, pickThreeCards } from "./3kart.js";
+import { createRelationshipReading, pickRelationshipCards } from "./iliskiEngine.js";
 
 const app = express();
 app.use(express.static("."));
@@ -201,7 +202,7 @@ wss.on("connection", (socket) => {
   socket.on("message", (raw) => {
     try {
       const message = JSON.parse(raw.toString());
-      if ((message.type === "tarot_finished" || message.type === "magic_finished" || message.type === "burc_finished" || message.type === "threecard_finished") &&
+      if ((message.type === "tarot_finished" || message.type === "magic_finished" || message.type === "burc_finished" || message.type === "threecard_finished" || message.type === "iliski_finished") &&
           waitingForClientCompletion !== null &&
           Number(message.questionId) === Number(waitingForClientCompletion)) {
         console.log("QUEUE: Ses ve 15 saniyelik ekran süresi tamamlandı:", message.questionId);
@@ -730,6 +731,47 @@ async function processQuestionQueue() {
       return;
     }
 
+    if (item.kind === "iliski") {
+      broadcast({ type: "iliski_start", questionId: item.id, username: item.username });
+      let reading = null;
+      try {
+        reading = await createRelationshipReading({ username: item.username });
+      } catch (error) {
+        console.error("İLİŞKİ: Motor hatası:", error.message || error);
+      }
+      if (!reading || !Array.isArray(reading.cards) || reading.cards.length !== 5) {
+        const cards = pickRelationshipCards();
+        reading = {
+          cards,
+          answer: `${item.username}, bu açılım duygular, düşünceler, belirsizlikler, engeller ve olası yönü birlikte ele alıyor. Kartlar kesin bir gelecek veya başka birinin zihnini kanıtlamaz; ilişkide sözlerle davranışların tutarlılığına ve açık iletişime dikkat et.`,
+          source: "safe-fallback"
+        };
+      }
+
+      waitingForClientCompletion = item.id;
+      if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
+      completionSafetyTimer = setTimeout(() => {
+        if (Number(waitingForClientCompletion) === Number(item.id)) {
+          console.log("QUEUE: İlişki güvenlik zaman aşımı:", item.id);
+          waitingForClientCompletion = null;
+          completionSafetyTimer = null;
+          processingQuestion = false;
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+        }
+      }, 120000);
+
+      broadcast({
+        type: "iliski_answer",
+        questionId: item.id,
+        username: item.username,
+        cards: reading.cards,
+        answer: reading.answer,
+        source: reading.source
+      });
+      console.log("İLİŞKİ: Yorum hazırlandı:", item.username, reading.cards.map(card => card.name).join(" / "), reading.source);
+      return;
+    }
+
     if (item.kind === "threecard") {
       broadcast({ type: "threecard_start", questionId: item.id, username: item.username });
       let reading = null;
@@ -1008,6 +1050,25 @@ function connectTikTok() {
             return;
           }
         }
+      }
+
+      // =========================
+      // İLİŞKİ AÇILIMI TETİĞİ
+      // Sohbete yalnızca "ilişki" yazılması beş kartlı ilişki motorunu kuyruğa alır.
+      // =========================
+      if (normalizeTurkishText(event.comment) === "iliski") {
+        const item = {
+          id: ++questionId,
+          kind: "iliski",
+          username: event.username || event.nickname || "izleyici",
+          nickname: event.nickname,
+          question: "Genel ilişki açılımı",
+          priority: false
+        };
+        questionQueue.push(item);
+        console.log("QUEUE: İlişki açılımı eklendi:", item.username, "| Bekleyen:", questionQueue.length);
+        processQuestionQueue();
+        return;
       }
 
       // =========================
