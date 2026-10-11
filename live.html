@@ -201,9 +201,15 @@
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         waitingLabelEl.style.display="none";
         usernameEl.textContent=data.username?"@"+data.username:"";
-        questionEl.textContent="İLİŞKİ AÇILIMI HAZIRLANIYOR";
-        cardEl.style.display="none"; answerEl.textContent="";
+        questionEl.textContent="İLİŞKİ SORUNU SOHBETE YAZ";
+        cardEl.style.display="none"; answerEl.textContent="Sorunu bekliyorum...";
         setBackground("iliski.mp4");
+        const relationshipPrompts=[
+          `${data.username||"Dostum"}, ilişki sorunu sohbete yaz. Beş kartı soruna göre açıp yorumlayacağım.`,
+          `Şimdi sıra sende ${data.username||""}. Barışma, eski sevgili, duygular ya da gelecekle ilgili sorunu yaz.`,
+          `${data.username||"Dostum"}, ilişki konusunda tam olarak neyi merak ediyorsun? Sorunu sohbete gönder.`
+        ];
+        speakAnswer(relationshipPrompts[Math.floor(Math.random()*relationshipPrompts.length)]);
         return;
       }
       if(data.type==="iliski_answer"){
@@ -212,7 +218,7 @@
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         cardEl.style.display="none"; hideThreeCards(); waitingLabelEl.style.display="none";
         usernameEl.textContent=data.username?"@"+data.username:"";
-        questionEl.textContent="NINJABOX İLİŞKİ AÇILIMI";
+        questionEl.textContent=data.question && data.question!=="Genel ilişki açılımı" ? data.question : "NINJABOX İLİŞKİ AÇILIMI";
         const cards=Array.isArray(data.cards)?data.cards:[];
         cards.slice(0,5).forEach((card,index)=>{
           const image=document.getElementById("relationshipCardImage"+index);

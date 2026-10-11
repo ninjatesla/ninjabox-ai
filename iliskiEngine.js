@@ -32,7 +32,7 @@ function drawRelationshipCards() {
   return cards;
 }
 
-function localRelationshipSynthesis(username, cards) {
+function localRelationshipSynthesis(username, cards, question = "") {
   const [feelings, thoughts, hidden, obstacle, direction] = cards;
   const openings = [
     "Bu açılımda ilişkinin duygusal tarafıyla davranışların aynı şeyi söyleyip söylemediğine bakıyoruz.",
@@ -52,16 +52,20 @@ function localRelationshipSynthesis(username, cards) {
   const obstacleLine = /kapan|yalnız|gecik|bekle|belirsiz|kork|engel|çatış|dengesiz|güven/i.test(obstacle.meaning)
     ? `Engel kartı olan ${obstacle.name}, ${obstacle.meaning.toLocaleLowerCase("tr-TR")} temasını öne çıkarıyor.`
     : `Engel kartı ${obstacle.name}, ilişkinin ilerlemesinde dikkat edilmesi gereken ${obstacle.meaning.toLocaleLowerCase("tr-TR")} temasını hatırlatıyor.`;
-  return `${username ? username + ", " : ""}${pick(openings)} Duygular alanındaki ${feelings.name} ${feelings.meaning.toLocaleLowerCase("tr-TR")} temasını taşırken, düşünceler alanındaki ${thoughts.name} ${thoughts.meaning.toLocaleLowerCase("tr-TR")} vurgusu yapıyor. ${contrast}. Gizli dinamiklerde ${hidden.name} kartı ${hidden.meaning.toLocaleLowerCase("tr-TR")} konusuna dikkat çekiyor. ${obstacleLine} Olası yönü gösteren ${direction.name} ise ${direction.meaning.toLocaleLowerCase("tr-TR")} temasını öne çıkarıyor. ${pick(closings)}`;
+  const questionLead = question && question !== "Genel ilişki açılımı"
+    ? `Sorun “${question}”. Bu soruya doğrudan bakarsak, `
+    : "Genel ilişki tablosunda, ";
+  return `${username ? username + ", " : ""}${questionLead}${pick(openings)} Duygular alanındaki ${feelings.name} ${feelings.meaning.toLocaleLowerCase("tr-TR")} temasını taşırken, düşünceler alanındaki ${thoughts.name} ${thoughts.meaning.toLocaleLowerCase("tr-TR")} vurgusu yapıyor. ${contrast}. Gizli dinamiklerde ${hidden.name} kartı ${hidden.meaning.toLocaleLowerCase("tr-TR")} konusuna dikkat çekiyor. ${obstacleLine} Olası yönü gösteren ${direction.name} ise ${direction.meaning.toLocaleLowerCase("tr-TR")} temasını öne çıkarıyor. ${pick(closings)}`;
 }
 
-function buildPrompt(username, cards) {
+function buildPrompt(username, question, cards) {
   const cardLines = cards.map((card, i) =>
     `${i + 1}. ${card.positionLabel}: ${card.name} (${card.orientation === "reversed" ? "TERS" : "DÜZ"}); anlam: ${card.meaning}.`
   ).join("\n");
   return `NinjaBox canlı yayını için deneyimli, empatik ve doğal bir Türkçe ilişki Tarot yorumcususun.
 İzleyici: ${username || "izleyici"}
-İzleyicinin özel bir sorusu yok; sohbete yalnızca "ilişki" yazarak genel ilişki açılımı istedi. Bu nedenle belirli bir partner, eski sevgili, cinsiyet, evlilik durumu veya olay uydurma. Her tür ilişki durumuna uygulanabilecek ama somut kart bağlantıları kuran genel bir yorum yaz.
+İzleyicinin sorusu: ${question || "Genel ilişki açılımı"}
+Soruyu dikkatle sınıflandır: yeni ilişki, mevcut ilişki, eski sevgili, ayrılık, barışma, iletişim/mesaj, duygular, düşünceler, kıskançlık, güven, sadakat, üçüncü kişi şüphesi, evlilik/gelecek, aile etkisi, uzak mesafe, kararsızlık, karşılıksız aşk veya ilişkiyi bitirme gibi temalardan hangisi uygunsa yalnızca o bağlama odaklan. Soruya doğrudan cevap ver; soruda olmayan bir olayı veya kişiyi uydurma. Beş kartı sorunun bağlamına göre birleştir.
 
 Beş kart:
 ${cardLines}
@@ -73,9 +77,12 @@ YORUM KURALLARI:
 - Kart adlarını ve verilen anlamları doğru kullan; her kartın düz/ters konumunu anlamına göre dikkate al.
 - Sonucu olumlu/karmaşık/zorlayıcı olarak açıkça çerçevele ama kesin gelecek iddiasında bulunma.
 - Karşı tarafın zihnini bildiğini iddia etme; "kesin seviyor", "aldatıyor", "kesin dönecek" deme. Gizli dinamik kartını kanıtsız suçlamaya dönüştürme.
-- Barışma, ayrılık, sadakat, kıskançlık veya evlilik hakkında bağlam verilmediği için bunlardan biri olmuş gibi davranma.
+- Soruda barışma, ayrılık, sadakat, kıskançlık veya evlilik konusu varsa bu bağlamı doğrudan ele al; soru bunları içermiyorsa kendiliğinden ekleme.
 - Genel ve tekrar eden boş tavsiyeler yerine kartların arasındaki ilişkiyi açıkla. Aynı giriş/kapanış kalıplarını tekrarlama.
 - Son cümlede bir kısa, uygulanabilir öneri ver.
+- Kullanıcı “geri döner mi/barışır mıyız” diyorsa olası yakınlaşma ve engelleri açıkça yorumla; “mesaj atar mı” diyorsa iletişim temasına cevap ver; “seviyor mu/ne düşünüyor” diyorsa bunu kart sembolizmi olarak çerçevele, zihin okuma iddiası kurma.
+- Aldatma/üçüncü kişi sorularında kartları kanıt gibi sunma; şüpheyi gerçek olarak doğrulama.
+- Tehdit, şiddet veya kontrol içeren ilişki durumlarında romantize etme; güvenlik ve destek aramayı öncele.
 Yalnızca yorum metnini yaz; başlık, madde veya teknik açıklama ekleme.`;
 }
 
@@ -131,9 +138,9 @@ export function pickRelationshipCards() {
   return drawRelationshipCards();
 }
 
-export async function createRelationshipReading({ username = "" } = {}) {
+export async function createRelationshipReading({ username = "", question = "" } = {}) {
   const cards = drawRelationshipCards();
-  const prompt = buildPrompt(username, cards);
+  const prompt = buildPrompt(username, question, cards);
   const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
   const apiKeyGemini = process.env.GEMINI_API_KEY;
   const models = (process.env.GEMINI_MODELS || "gemini-3.5-flash,gemini-3.7-flash,gemini-3.8-flash")
@@ -150,6 +157,6 @@ export async function createRelationshipReading({ username = "" } = {}) {
     if (!answer) answer = await generateOpenAI(prompt, apiKeyOpenAI, openAIModel);
   }
 
-  if (!answer) answer = localRelationshipSynthesis(username, cards);
+  if (!answer) answer = localRelationshipSynthesis(username, cards, question);
   return { cards, answer, source: answer ? "ai-or-local-fallback" : "safe-fallback" };
 }

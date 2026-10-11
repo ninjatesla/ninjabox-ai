@@ -43,6 +43,8 @@ let waitingForClientCompletion = null;
 let completionSafetyTimer = null;
 let activeBurcRequest = null;
 let burcInputTimer = null;
+let activeRelationshipRequest = null;
+let relationshipInputTimer = null;
 
 // CHAT filtresi: sohbet, sıra, bedava bakma ve provokasyon mesajlarını
 // Tarot kuyruğuna almadan önce ayıklar. Ses/yanıt akışına dokunmaz.
@@ -210,6 +212,10 @@ wss.on("connection", (socket) => {
         if (message.type === "burc_finished") {
           if (burcInputTimer) { clearTimeout(burcInputTimer); burcInputTimer = null; }
           activeBurcRequest = null;
+        }
+        if (message.type === "iliski_finished") {
+          if (relationshipInputTimer) { clearTimeout(relationshipInputTimer); relationshipInputTimer = null; }
+          activeRelationshipRequest = null;
         }
         if (completionSafetyTimer) {
           clearTimeout(completionSafetyTimer);
@@ -652,6 +658,43 @@ async function resolveBurcRequest(session, parsed) {
   });
 }
 
+
+async function resolveRelationshipRequest(session, question) {
+  if (!session || session.resolved || Number(waitingForClientCompletion) !== Number(session.id)) return;
+  session.resolved = true;
+  if (relationshipInputTimer) { clearTimeout(relationshipInputTimer); relationshipInputTimer = null; }
+
+  const cleanQuestion = String(question || "").trim().slice(0, 400);
+  const actualQuestion = cleanQuestion || "Genel ilişki açılımı";
+  let reading = null;
+  try {
+    reading = await createRelationshipReading({ username: session.username, question: actualQuestion });
+  } catch (error) {
+    console.error("İLİŞKİ: Yorum oluşturulamadı:", error.message || error);
+  }
+
+  if (Number(waitingForClientCompletion) !== Number(session.id)) return;
+  if (!reading || !Array.isArray(reading.cards) || reading.cards.length !== 5) {
+    const cards = pickRelationshipCards();
+    reading = {
+      cards,
+      answer: `${session.username}, ${actualQuestion === "Genel ilişki açılımı" ? "bu genel ilişki açılımında" : `“${actualQuestion}” sorunda`} duygular, düşünceler, belirsizlikler, engeller ve olası yön birlikte değerlendiriliyor. Kartlar başka birinin zihnini kanıtlamaz; en güçlü işaret, sözlerle davranışların tutarlılığı ve açık iletişimdir.`,
+      source: "safe-fallback"
+    };
+  }
+
+  broadcast({
+    type: "iliski_answer",
+    questionId: session.id,
+    username: session.username,
+    question: actualQuestion,
+    cards: reading.cards,
+    answer: reading.answer,
+    source: reading.source
+  });
+  console.log("İLİŞKİ: Soruya göre yorum hazırlandı:", session.username, "=>", actualQuestion, "|", reading.cards.map(card => card.name).join(" / "), reading.source);
+}
+
 async function processQuestionQueue() {
   if (processingQuestion) return;
 
@@ -732,43 +775,34 @@ async function processQuestionQueue() {
     }
 
     if (item.kind === "iliski") {
-      broadcast({ type: "iliski_start", questionId: item.id, username: item.username });
-      let reading = null;
-      try {
-        reading = await createRelationshipReading({ username: item.username });
-      } catch (error) {
-        console.error("İLİŞKİ: Motor hatası:", error.message || error);
-      }
-      if (!reading || !Array.isArray(reading.cards) || reading.cards.length !== 5) {
-        const cards = pickRelationshipCards();
-        reading = {
-          cards,
-          answer: `${item.username}, bu açılım duygular, düşünceler, belirsizlikler, engeller ve olası yönü birlikte ele alıyor. Kartlar kesin bir gelecek veya başka birinin zihnini kanıtlamaz; ilişkide sözlerle davranışların tutarlılığına ve açık iletişime dikkat et.`,
-          source: "safe-fallback"
-        };
-      }
-
+      activeRelationshipRequest = {
+        id: item.id,
+        username: item.username,
+        nickname: item.nickname,
+        startedAt: Date.now(),
+        resolved: false
+      };
       waitingForClientCompletion = item.id;
+      broadcast({ type: "iliski_start", questionId: item.id, username: item.username });
       if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
       completionSafetyTimer = setTimeout(() => {
         if (Number(waitingForClientCompletion) === Number(item.id)) {
-          console.log("QUEUE: İlişki güvenlik zaman aşımı:", item.id);
+          console.log("QUEUE: İlişki güvenlik zaman aşımı, kuyruk açılıyor:", item.id);
           waitingForClientCompletion = null;
           completionSafetyTimer = null;
+          activeRelationshipRequest = null;
+          if (relationshipInputTimer) { clearTimeout(relationshipInputTimer); relationshipInputTimer = null; }
           processingQuestion = false;
           if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
         }
-      }, 120000);
-
-      broadcast({
-        type: "iliski_answer",
-        questionId: item.id,
-        username: item.username,
-        cards: reading.cards,
-        answer: reading.answer,
-        source: reading.source
-      });
-      console.log("İLİŞKİ: Yorum hazırlandı:", item.username, reading.cards.map(card => card.name).join(" / "), reading.source);
+      }, 180000);
+      if (relationshipInputTimer) clearTimeout(relationshipInputTimer);
+      relationshipInputTimer = setTimeout(() => {
+        if (activeRelationshipRequest && Number(activeRelationshipRequest.id) === Number(item.id) && !activeRelationshipRequest.resolved) {
+          resolveRelationshipRequest(activeRelationshipRequest, null).catch(error => console.error("İLİŞKİ zaman aşımı yorumu hatası:", error.message || error));
+        }
+      }, 60000);
+      console.log("İLİŞKİ: İzleyicinin sorusu bekleniyor (60 sn):", item.username, "ID:", item.id);
       return;
     }
 
@@ -1053,6 +1087,26 @@ function connectTikTok() {
       }
 
       // =========================
+      // AKTİF İLİŞKİ OTURUMU: yalnızca açılımı başlatan izleyicinin sorusunu al
+      // =========================
+      if (activeRelationshipRequest && !activeRelationshipRequest.resolved) {
+        const currentUser = normalizeTurkishText(event.username || event.nickname || "");
+        const expectedUser = normalizeTurkishText(activeRelationshipRequest.username || activeRelationshipRequest.nickname || "");
+        const normalizedComment = normalizeTurkishText(event.comment);
+        if (currentUser && expectedUser && currentUser === expectedUser) {
+          if (normalizedComment === "iliski") {
+            console.log("İLİŞKİ: Aynı izleyicinin tetiklemesi tekrarlandı; soru bekleniyor:", activeRelationshipRequest.username);
+            return;
+          }
+          if (event.comment.trim().length >= 3) {
+            console.log("İLİŞKİ: Soru alındı:", activeRelationshipRequest.username, "=>", event.comment);
+            resolveRelationshipRequest(activeRelationshipRequest, event.comment).catch(error => console.error("İLİŞKİ cevap hatası:", error.message || error));
+            return;
+          }
+        }
+      }
+
+      // =========================
       // İLİŞKİ AÇILIMI TETİĞİ
       // Sohbete yalnızca "ilişki" yazılması beş kartlı ilişki motorunu kuyruğa alır.
       // =========================
@@ -1062,7 +1116,7 @@ function connectTikTok() {
           kind: "iliski",
           username: event.username || event.nickname || "izleyici",
           nickname: event.nickname,
-          question: "Genel ilişki açılımı",
+          question: "",
           priority: false
         };
         questionQueue.push(item);
