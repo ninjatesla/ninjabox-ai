@@ -9,6 +9,7 @@ import { drawOneCard } from "./tarotEngine.js";
 import { getLocalTarotAnswer } from "./tarotFallback.js";
 import { createMagicMessage } from "./magicMessageEngine.js";
 import { parseBurcInput, generateBurcCommentary } from "./burcEngine.js";
+import { createThreeCardReading } from "./3kart.js";
 
 const app = express();
 app.use(express.static("."));
@@ -200,7 +201,7 @@ wss.on("connection", (socket) => {
   socket.on("message", (raw) => {
     try {
       const message = JSON.parse(raw.toString());
-      if ((message.type === "tarot_finished" || message.type === "magic_finished" || message.type === "burc_finished") &&
+      if ((message.type === "tarot_finished" || message.type === "magic_finished" || message.type === "burc_finished" || message.type === "threecard_finished") &&
           waitingForClientCompletion !== null &&
           Number(message.questionId) === Number(waitingForClientCompletion)) {
         console.log("QUEUE: Ses ve 15 saniyelik ekran süresi tamamlandı:", message.questionId);
@@ -729,6 +730,51 @@ async function processQuestionQueue() {
       return;
     }
 
+    if (item.kind === "threecard") {
+      broadcast({ type: "threecard_start", questionId: item.id, username: item.username });
+      let reading = null;
+      try {
+        reading = await Promise.race([
+          createThreeCardReading({ username: item.username, question: item.question || "" }),
+          new Promise((resolve) => setTimeout(() => resolve(null), 12000))
+        ]);
+      } catch (error) {
+        console.error("3 KART: Motor hatası:", error.message || error);
+      }
+
+      if (!reading) {
+        reading = {
+          cards: [],
+          answer: `${item.username}, üç kart açılımını şu anda hazırlayamadım. Biraz sonra yeniden deneyebiliriz.`,
+          source: "timeout-fallback"
+        };
+      }
+
+      waitingForClientCompletion = item.id;
+      if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
+      completionSafetyTimer = setTimeout(() => {
+        if (Number(waitingForClientCompletion) === Number(item.id)) {
+          console.log("QUEUE: Üç kart güvenlik zaman aşımı:", item.id);
+          waitingForClientCompletion = null;
+          completionSafetyTimer = null;
+          processingQuestion = false;
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+        }
+      }, 120000);
+
+      broadcast({
+        type: "threecard_answer",
+        questionId: item.id,
+        username: item.username,
+        question: item.question || "Üç kart açılımı",
+        cards: reading.cards,
+        answer: reading.answer,
+        source: reading.source
+      });
+      console.log("3 KART: Yorum hazırlandı:", item.username, (reading.cards || []).map(card => card.name).join(" / "), reading.source);
+      return;
+    }
+
     broadcast({
     type: "tarot_start",
     questionId: item.id,
@@ -956,6 +1002,25 @@ function connectTikTok() {
             return;
           }
         }
+      }
+
+      // =========================
+      // ÜÇ KART TAROT TETİĞİ
+      // Sohbete "3kart" yazılması üç kart açılımını sıraya ekler.
+      // =========================
+      if (normalizeTurkishText(event.comment).replace(/\s+/g, "") === "3kart") {
+        const item = {
+          id: ++questionId,
+          kind: "threecard",
+          username: event.username || event.nickname || "izleyici",
+          nickname: event.nickname,
+          question: "",
+          priority: false
+        };
+        questionQueue.push(item);
+        console.log("QUEUE: Üç kart açılımı eklendi:", item.username, "| Bekleyen:", questionQueue.length);
+        processQuestionQueue();
+        return;
       }
 
       // =========================

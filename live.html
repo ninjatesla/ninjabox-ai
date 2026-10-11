@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#000000">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="manifest" href="/manifest.json">
   <title>NinjaBox Tarot LIVE</title>
   <style>
@@ -17,6 +16,12 @@
     .username{font-size:17px;font-weight:bold;margin-bottom:5px}.question{font-size:clamp(17px,4.5vw,24px);font-weight:bold;line-height:1.2}
     .waiting-label{position:absolute;top:28.2%;left:50%;transform:translateX(-50%);width:90%;text-align:center;color:#fff;font-size:clamp(17px,4.5vw,23px);font-weight:700;text-shadow:0 2px 6px #000;z-index:4;display:none}
     .card{position:absolute;top:28.2%;left:50%;transform:translateX(-50%);width:min(31vw,190px);max-height:40vh;object-fit:contain;border-radius:10px;box-shadow:0 10px 35px rgba(0,0,0,.9);z-index:3}
+    .three-cards{position:absolute;top:28%;left:2%;right:2%;display:none;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;z-index:4}
+    .three-card{min-width:0;text-align:center;color:#fff;text-shadow:0 2px 5px #000}
+    .three-card img{width:100%;max-width:140px;height:min(29vh,220px);object-fit:contain;border-radius:8px;filter:drop-shadow(0 6px 10px #000)}
+    .three-card .position{font-size:clamp(10px,2.5vw,13px);font-weight:bold;margin-bottom:4px}
+    .three-card .card-name{font-size:clamp(11px,2.8vw,15px);font-weight:bold;line-height:1.15;margin-top:4px}
+    .three-card .orientation{font-size:10px;opacity:.9;margin-top:2px}
     .orientation,.answer,.chat-panel{display:none!important}.status{position:absolute;bottom:2%;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:10px;white-space:nowrap;z-index:8}
     .controls{position:fixed;bottom:5%;left:5%;right:5%;display:flex;gap:10px;z-index:9999}.control-button{flex:1;min-width:0;min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(0,0,0,.82);color:#fff;font-size:clamp(12px,3.2vw,15px);font-weight:700;padding:10px 6px}
   </style>
@@ -29,10 +34,16 @@
   <div class="live">
     <video id="backgroundVideo" class="background-video" src="/tarot.mp4" autoplay muted loop playsinline></video>
     <audio id="burcIntroAudio" src="/burc.mp3" preload="auto"></audio>
+    <audio id="threeCardIntroAudio" src="/3kart.mp3" preload="auto"></audio>
     <div class="overlay">
       <div id="status" class="status">NinjaBox · Sesli yorum aktif</div>
       <div id="orientation" class="orientation">TAROT</div>
       <img id="card" class="card" src="" alt="Tarot Kartı" style="display:none;">
+      <div id="threeCards" class="three-cards">
+        <div class="three-card"><div class="position">GEÇMİŞ</div><img id="threeCardImage0" src="" alt=""><div class="card-name" id="threeCardName0"></div><div class="orientation" id="threeCardOrientation0"></div></div>
+        <div class="three-card"><div class="position">ŞİMDİ</div><img id="threeCardImage1" src="" alt=""><div class="card-name" id="threeCardName1"></div><div class="orientation" id="threeCardOrientation1"></div></div>
+        <div class="three-card"><div class="position">OLASI YÖN</div><img id="threeCardImage2" src="" alt=""><div class="card-name" id="threeCardName2"></div><div class="orientation" id="threeCardOrientation2"></div></div>
+      </div>
       <div id="chatPanel" class="chat-panel"></div>
       <div class="answer" id="answer"></div>
       <div class="question-box"><div class="username" id="username"></div><div class="question" id="question"></div></div>
@@ -43,11 +54,13 @@
   const usernameEl=document.getElementById("username");
   const questionEl=document.getElementById("question");
   const cardEl=document.getElementById("card");
+  const threeCardsEl=document.getElementById("threeCards");
   const orientationEl=document.getElementById("orientation");
   const answerEl=document.getElementById("answer");
   const waitingLabelEl=document.getElementById("waitingLabel");
   const backgroundVideo=document.getElementById("backgroundVideo");
   const burcIntroAudio=document.getElementById("burcIntroAudio");
+  const threeCardIntroAudio=document.getElementById("threeCardIntroAudio");
   let activeQuestionId=null, displayCleanupTimer=null, finishSafetyTimer=null;
   const socket=new WebSocket("wss://ninjabox-ai-production.up.railway.app");
 
@@ -61,16 +74,17 @@
     const playPromise=backgroundVideo.play();
     if(playPromise && typeof playPromise.catch==="function") playPromise.catch(()=>{});
   }
+  function hideThreeCards(){if(threeCardsEl)threeCardsEl.style.display="none";}
   function showWaitingScreen(){
     usernameEl.textContent=""; questionEl.textContent=""; cardEl.style.display="none";
-    answerEl.textContent=""; waitingLabelEl.style.display="block";
+    hideThreeCards(); answerEl.textContent=""; waitingLabelEl.style.display="block";
   }
   function finishItemAfterDisplay(questionId, finishType){
     if(displayCleanupTimer) clearTimeout(displayCleanupTimer);
     displayCleanupTimer=setTimeout(()=>{
       if(Number(activeQuestionId)!==Number(questionId)) return;
       showWaitingScreen();
-      if(finishType==="magic_finished" || finishType==="burc_finished") setBackground("tarot.mp4");
+      if(finishType==="magic_finished" || finishType==="burc_finished" || finishType==="threecard_finished") setBackground("tarot.mp4");
       if(socket.readyState===WebSocket.OPEN) socket.send(JSON.stringify({type:finishType,questionId}));
       displayCleanupTimer=null;
     },15000);
@@ -93,12 +107,16 @@
     const prompt=`${username || "İzleyici"}, burç yorumunu hazırlayalım. Burcunu ve biliyorsan yükselen burcunu sohbete yaz. Örneğin Aslan, yükselen Terazi. Yükselenini bilmiyorsan yalnızca burcunu yazabilirsin.`;
     const speakPrompt=()=>speakAnswer(prompt);
     if(!burcIntroAudio){speakPrompt();return;}
-    burcIntroAudio.pause();
-    burcIntroAudio.currentTime=0;
-    burcIntroAudio.onended=speakPrompt;
-    burcIntroAudio.onerror=speakPrompt;
+    burcIntroAudio.pause(); burcIntroAudio.currentTime=0;
+    burcIntroAudio.onended=speakPrompt; burcIntroAudio.onerror=speakPrompt;
     const promise=burcIntroAudio.play();
     if(promise && typeof promise.catch==="function") promise.catch(speakPrompt);
+  }
+  function playThreeCardIntro(){
+    if(!threeCardIntroAudio)return;
+    threeCardIntroAudio.pause(); threeCardIntroAudio.currentTime=0;
+    const promise=threeCardIntroAudio.play();
+    if(promise && typeof promise.catch==="function") promise.catch(()=>{});
   }
 
   socket.onopen=()=>{answerEl.textContent="Tarot LIVE hazır. Sorunu sohbete yaz...";};
@@ -107,8 +125,7 @@
       const data=JSON.parse(event.data);
       console.log("LIVE EVENT:",data);
       if(data.type==="tarot_start"){
-        activeQuestionId=data.questionId;
-        setBackground("tarot.mp4");
+        activeQuestionId=data.questionId; setBackground("tarot.mp4"); hideThreeCards();
         waitingLabelEl.style.display="none";
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -126,16 +143,14 @@
         return;
       }
       if(data.type==="burc_start"){
-        activeQuestionId=data.questionId;
-        setBackground("tarot.mp4");
+        activeQuestionId=data.questionId; setBackground("tarot.mp4"); hideThreeCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         if(burcIntroAudio){burcIntroAudio.pause();burcIntroAudio.currentTime=0;}
         waitingLabelEl.style.display="none";
         usernameEl.textContent=data.username?"@"+data.username:"";
         questionEl.textContent="Burcunu ve varsa yükselen burcunu sohbete yaz";
-        cardEl.style.display="none";
-        answerEl.textContent="Burç bilgisi bekleniyor...";
+        cardEl.style.display="none"; answerEl.textContent="Burç bilgisi bekleniyor...";
         playBurcIntro(data.username);
         return;
       }
@@ -153,16 +168,49 @@
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         waitingLabelEl.style.display="none";
         usernameEl.textContent=data.username?"@"+data.username:"";
-        questionEl.textContent="";
-        cardEl.style.display="none";
-        answerEl.textContent="";
+        questionEl.textContent=""; cardEl.style.display="none"; hideThreeCards(); answerEl.textContent="";
         setBackground("sihirli.mp4");
         return;
       }
       if(data.type==="magic_answer"){
         if(Number(data.questionId)!==Number(activeQuestionId))return;
-        // Yalnızca kısa sihirli mesaj seslendirilir; kart adı/görseli gösterilmez.
         speakAnswer(data.answer||"",()=>{setBackground("tarot.mp4");finishItemAfterDisplay(data.questionId,"magic_finished");});
+        return;
+      }
+      if(data.type==="threecard_start"){
+        activeQuestionId=data.questionId;
+        setBackground("tarot.mp4");
+        hideThreeCards();
+        if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
+        if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
+        waitingLabelEl.style.display="none";
+        usernameEl.textContent=data.username?"@"+data.username:"";
+        questionEl.textContent="ÜÇ KART AÇILIMI HAZIRLANIYOR";
+        cardEl.style.display="none";
+        answerEl.textContent="";
+        playThreeCardIntro();
+        return;
+      }
+      if(data.type==="threecard_answer"){
+        if(Number(data.questionId)!==Number(activeQuestionId))return;
+        if(threeCardIntroAudio){threeCardIntroAudio.pause();threeCardIntroAudio.currentTime=0;}
+        if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
+        if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
+        if(threeCardIntroAudio){threeCardIntroAudio.pause();threeCardIntroAudio.currentTime=0;}
+        cardEl.style.display="none"; waitingLabelEl.style.display="none";
+        usernameEl.textContent=data.username?"@"+data.username:"";
+        questionEl.textContent="ÜÇ KART AÇILIMI";
+        const cards=Array.isArray(data.cards)?data.cards:[];
+        cards.slice(0,3).forEach((card,index)=>{
+          document.getElementById("threeCardImage"+index).src="/"+(card.image||"");
+          document.getElementById("threeCardImage"+index).alt=card.name||"Tarot kartı";
+          document.getElementById("threeCardName"+index).textContent=card.name||"";
+          document.getElementById("threeCardOrientation"+index).textContent=card.orientation==="reversed"?"TERS":"DÜZ";
+        });
+        threeCardsEl.style.display="grid";
+        answerEl.textContent=data.answer||"";
+        speakAnswer(data.answer||"",()=>finishItemAfterDisplay(data.questionId,"threecard_finished"));
+        return;
       }
     }catch(error){console.error("LIVE event error:",error);}
   };
