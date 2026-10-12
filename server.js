@@ -15,7 +15,7 @@ import { createRelationshipReading, pickRelationshipCards } from "./iliskiEngine
 const app = express();
 app.use(express.static("."));
 const PORT = process.env.PORT || 3000;
-const TIKTOK_USERNAME = "ninjacoretrader";
+const TIKTOK_USERNAME = "ninjaboxx";
 
 // Like-based free Tarot rewards are intentionally disabled.
 
