@@ -1,6 +1,4 @@
 import express from "express";
-import fs from "node:fs";
-import path from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
 import {
   TikTokLiveConnection,
@@ -19,43 +17,7 @@ app.use(express.static("."));
 const PORT = process.env.PORT || 3000;
 const TIKTOK_USERNAME = "ninjacoretrader";
 
-// Like-reward test settings: ordinary viewers at 100 likes, moderators at 30,000.
-// Raise FREE_TAROT_LIKE_THRESHOLD to 3000 after the test passes.
-const FREE_TAROT_LIKE_THRESHOLD = Math.max(1, Number(process.env.FREE_TAROT_LIKE_THRESHOLD || 100));
-const MODERATOR_FREE_TAROT_LIKE_THRESHOLD = 30000;
-const DATA_DIR = process.env.NINJABOX_DATA_DIR || ".";
-const LIKE_REWARD_FILE = path.join(DATA_DIR, "ninjabox-like-rewards.json");
-const likeRewardState = { users: {} };
-try {
-  const saved = JSON.parse(fs.readFileSync(LIKE_REWARD_FILE, "utf8"));
-  if (saved && saved.users && typeof saved.users === "object") likeRewardState.users = saved.users;
-  console.log("LIKE REWARD: Kayıt yüklendi:", LIKE_REWARD_FILE);
-} catch (error) {
-  if (error.code !== "ENOENT") console.error("LIKE REWARD: Kayıt okunamadı:", error.message);
-}
-function saveLikeRewardState() {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    const tempFile = LIKE_REWARD_FILE + ".tmp";
-    fs.writeFileSync(tempFile, JSON.stringify(likeRewardState, null, 2));
-    fs.renameSync(tempFile, LIKE_REWARD_FILE);
-  } catch (error) {
-    console.error("LIKE REWARD: Kayıt yazılamadı:", error.message || error);
-  }
-}
-function stableUserKey(username, userId) {
-  return String(userId || username || "").trim().toLocaleLowerCase("tr-TR");
-}
-function getLikeRewardUser(username, userId) {
-  const key = stableUserKey(username, userId);
-  if (!key) return null;
-  if (!likeRewardState.users[key]) likeRewardState.users[key] = {
-    username: username || key, userId: userId || null, likes: 0,
-    normalMilestones: 0, moderatorMilestones: 0, pendingRewards: 0,
-    isModerator: false
-  };
-  return likeRewardState.users[key];
-}
+// Like-based free Tarot rewards are intentionally disabled.
 
 const AI_PROVIDER =
   (process.env.AI_PROVIDER || "gemini").toLowerCase();
@@ -1107,34 +1069,6 @@ function connectTikTok() {
       );
 
       // =========================
-      // BEKLEYEN ÜCRETSİZ TAROT HAKKI: izleyici soru yazınca hakkı kuyruğa girer
-      // =========================
-      const rewardUser = getLikeRewardUser(event.username || event.nickname, event.userId);
-      if (rewardUser && rewardUser.pendingRewards > 0 && event.comment.trim().length >= 3) {
-        rewardUser.pendingRewards -= 1;
-        saveLikeRewardState();
-        const draw = drawOneCard();
-        const freeItem = {
-          id: ++questionId,
-          kind: "freeTarot",
-          username: event.username || event.nickname || "izleyici",
-          nickname: event.nickname,
-          question: event.comment.trim().slice(0, 400),
-          card: draw.card,
-          orientation: draw.orientation,
-          meaning: draw.meaning,
-          retryCount: 0,
-          priority: false,
-          freeReward: true
-        };
-        questionQueue.push(freeItem);
-        console.log("FREE TAROT: Beğeni ödülü sorusu kuyruğa eklendi:", freeItem.username, "| Kalan hak:", rewardUser.pendingRewards, "| Soru:", freeItem.question);
-        broadcast({ type: "free_tarot_queued", username: freeItem.username, remainingRewards: rewardUser.pendingRewards });
-        processQuestionQueue();
-        return;
-      }
-
-      // =========================
       // AKTİF BURÇ OTURUMU: yalnızca sıradaki kişinin kendi mesajını kabul et
       // =========================
       if (activeBurcRequest && !activeBurcRequest.resolved) {
@@ -1319,7 +1253,7 @@ function connectTikTok() {
   );
 
   // =========================
-  // GIFT
+  // GIFT -> PAID TAROT REWARD
   // =========================
 
   tiktokConnection.on(
@@ -1328,86 +1262,122 @@ function connectTikTok() {
       const username =
         data.user?.displayId ||
         data.user?.uniqueId ||
-        data.user?.nickname;
-
-      console.log(
-        "GIFT:",
-        username
+        data.user?.nickname ||
+        "izleyici";
+      const nickname = data.user?.nickname || username;
+      const giftDetails = data.giftDetails || data.gift || data.extendedGiftInfo || {};
+      const giftName = String(
+        giftDetails.giftName || giftDetails.name || giftDetails.gift_name ||
+        data.giftName || data.gift_name || data.extendedGiftInfo?.giftName ||
+        data.extendedGiftInfo?.name || ""
+      ).trim();
+      const normalizedGiftName = normalizeTurkishText(giftName);
+      const giftId = data.giftId ?? giftDetails.giftId ?? giftDetails.id ?? null;
+      const diamondCount = Number(
+        giftDetails.diamondCount ?? giftDetails.diamond_count ??
+        data.diamondCount ?? data.diamond_count ?? 0
       );
+      const repeatCount = Number(data.repeatCount || 1);
+      const giftType = Number(data.giftType || 0);
+      const repeatEnd = data.repeatEnd;
 
-      const user =
-        String(
-          username || ""
-        ).toLowerCase();
+      console.log("GIFT:", username, "| ad:", giftName || "BİLİNMİYOR", "| coin/diamond:", diamondCount || "BİLİNMİYOR", "| giftId:", giftId, "| tekrar:", repeatCount, "| repeatEnd:", repeatEnd);
+      console.log("GIFT RAW:", JSON.stringify(data));
 
-      const index =
-        questionQueue.findIndex(
-          (item) =>
-            String(
-              item.username || ""
-            ).toLowerCase() === user
-        );
-
-      // Bekleyen sorusu varsa başa taşı.
-      if (index > 0) {
-        const [item] =
-          questionQueue.splice(
-            index,
-            1
-          );
-
-        item.priority = true;
-
-        questionQueue.unshift(
-          item
-        );
-
-        console.log(
-          "QUEUE: Hediye önceliği:",
-          item.username
-        );
-
-        broadcast({
-          type:
-            "gift_priority",
-          username:
-            item.username
-        });
-
-      } else if (index === 0) {
-
-        console.log(
-          "QUEUE: Kullanıcı zaten sıranın başında:",
-          username
-        );
-
-      } else {
-
-        console.log(
-          "GIFT: Bekleyen soru bulunamadı:",
-          username
-        );
+      // Streakable gifts may emit several events. Wait for the final event.
+      if (giftType === 1 && repeatEnd === false) {
+        console.log("GIFT: Seri hediyenin bitiş olayı bekleniyor:", username, giftName || giftId);
+        return;
       }
 
-      // Şimdilik gift raw logu kalsın.
-      console.log(
-        "GIFT RAW:",
-        JSON.stringify(data)
+      // Preserve the existing behaviour: prioritize this viewer's already queued question.
+      const user = String(username || "").toLocaleLowerCase("tr-TR");
+      const index = questionQueue.findIndex((item) =>
+        String(item.username || "").toLocaleLowerCase("tr-TR") === user
       );
+      if (index > 0) {
+        const [item] = questionQueue.splice(index, 1);
+        item.priority = true;
+        questionQueue.unshift(item);
+        console.log("QUEUE: Hediye önceliği:", item.username);
+        broadcast({ type: "gift_priority", username: item.username });
+      } else if (index === 0) {
+        console.log("QUEUE: Kullanıcı zaten sıranın başında:", username);
+      }
 
+      // Gift name is the primary key: coin count alone is not enough because
+      // Balloon and Confetti both cost 100 coins but unlock different readings.
+      let rewardKind = null;
+      if (normalizedGiftName.includes("donut") || normalizedGiftName.includes("doughnut") || normalizedGiftName.includes("donat")) {
+        rewardKind = "magic"; // Donut, 30 coins -> Sihirli Mesaj
+      } else if (normalizedGiftName === "tea" || normalizedGiftName === "cay" || normalizedGiftName.includes("tea gift")) {
+        rewardKind = "tarot"; // Tea, 50 coins -> Tek Kart
+      } else if (normalizedGiftName === "hat" || normalizedGiftName.includes("sapka") || normalizedGiftName.includes("hat gift")) {
+        rewardKind = "burc"; // Hat, 99 coins -> Burç
+      } else if (normalizedGiftName.includes("balloon") || normalizedGiftName.includes("balon")) {
+        rewardKind = "threecard"; // Balloon, 100 coins -> Üç Kart
+      } else if (normalizedGiftName.includes("confetti") || normalizedGiftName.includes("konfeti")) {
+        rewardKind = "iliski"; // Confetti, 100 coins -> İlişki
+      }
+
+      if (!rewardKind) {
+        console.log("GIFT: Bu hediye için ödül eşleştirmesi yok; yalnızca mevcut hediye önceliği uygulandı:", giftName || "isim alınamadı");
+        processQuestionQueue();
+        return;
+      }
+
+      const rewardLabels = {
+        magic: "Sihirli Mesaj",
+        tarot: "Tek Kart Tarot",
+        burc: "Burç Yorumu",
+        threecard: "Üç Kart Tarot",
+        iliski: "İlişki Açılımı"
+      };
+      const item = {
+        id: ++questionId,
+        kind: rewardKind,
+        username,
+        nickname,
+        question: rewardKind === "burc" ? "Burç yorumu" : "",
+        priority: true,
+        giftReward: true,
+        giftName,
+        giftId,
+        diamondCount
+      };
+
+      if (rewardKind === "tarot") {
+        const draw = drawOneCard();
+        item.card = draw.card;
+        item.orientation = draw.orientation;
+        item.meaning = draw.meaning;
+        item.question = "Hediye ile açılan tek kart";
+        item.retryCount = 0;
+      }
+
+      // Gift rewards are queued next; an already-running reading is never interrupted.
+      questionQueue.unshift(item);
+      console.log("GIFT REWARD: Kuyruğa eklendi:", username, "=>", rewardLabels[rewardKind], "| Hediye:", giftName, "| Coin/diamond:", diamondCount || "bilinmiyor", "| Bekleyen:", questionQueue.length);
+      broadcast({
+        type: "gift_reward_queued",
+        username,
+        giftName,
+        rewardKind,
+        rewardLabel: rewardLabels[rewardKind],
+        questionId: item.id
+      });
       processQuestionQueue();
     }
   );
 
   // =========================
-  // LIKE
+  // LIKE (display/log only; like-based rewards are disabled)
   // =========================
 
   tiktokConnection.on(
     WebcastEvent.LIKE,
     (data) => {
       const username = data.user?.uniqueId || data.user?.displayId || data.user?.nickname;
-      const userId = data.user?.id;
       const isModerator = Boolean(
         data.userIdentity?.isModeratorOfAnchor ??
         data.user?.userIdentity?.isModeratorOfAnchor ??
@@ -1420,46 +1390,8 @@ function connectTikTok() {
         totalLikeCount: data.totalLikeCount,
         isModerator
       };
-      console.log("LIKE:", username, "=>", event.likeCount, "total:", event.totalLikeCount, "moderator:", isModerator);
+      console.log("LIKE (ödül kapalı):", username, "=>", event.likeCount, "total:", event.totalLikeCount, "moderator:", isModerator);
       broadcast(event);
-
-      const rewardUser = getLikeRewardUser(username, userId);
-      if (!rewardUser) return;
-      rewardUser.username = username || rewardUser.username;
-      rewardUser.userId = userId || rewardUser.userId;
-      rewardUser.isModerator = rewardUser.isModerator || isModerator;
-
-      // totalLikeCount is preferred because the connector may emit repeated like events.
-      // If unavailable, only use a positive event count as a fallback.
-      const reportedTotal = Number(data.totalLikeCount);
-      if (Number.isFinite(reportedTotal) && reportedTotal >= 0) {
-        rewardUser.likes = Math.max(Number(rewardUser.likes) || 0, reportedTotal);
-      } else {
-        const increment = Number(data.likeCount);
-        if (Number.isFinite(increment) && increment > 0) rewardUser.likes = (Number(rewardUser.likes) || 0) + increment;
-      }
-
-      const moderatorThreshold = rewardUser.isModerator ? MODERATOR_FREE_TAROT_LIKE_THRESHOLD : FREE_TAROT_LIKE_THRESHOLD;
-      const milestoneField = rewardUser.isModerator ? "moderatorMilestones" : "normalMilestones";
-      const reachedMilestones = Math.floor(rewardUser.likes / moderatorThreshold);
-      if (reachedMilestones > (Number(rewardUser[milestoneField]) || 0)) {
-        const newlyEarned = reachedMilestones - (Number(rewardUser[milestoneField]) || 0);
-        rewardUser[milestoneField] = reachedMilestones;
-        rewardUser.pendingRewards = (Number(rewardUser.pendingRewards) || 0) + newlyEarned;
-        saveLikeRewardState();
-        console.log("FREE TAROT: Ödül kazanıldı:", username, "| beğeni:", rewardUser.likes, "| eşik:", moderatorThreshold, "| yeni hak:", newlyEarned);
-        broadcast({
-          type: "free_tarot_prompt",
-          username,
-          isModerator: rewardUser.isModerator,
-          likes: rewardUser.likes,
-          threshold: moderatorThreshold,
-          pendingRewards: rewardUser.pendingRewards,
-          message: `${username}, ${moderatorThreshold.toLocaleString("tr-TR")} beğeni ödülünü kazandın! Ücretsiz Tarot için sorunu sohbete yaz.`
-        });
-      } else {
-        saveLikeRewardState();
-      }
     }
   );
 
