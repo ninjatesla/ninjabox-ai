@@ -47,6 +47,10 @@ let activeBurcRequest = null;
 let burcInputTimer = null;
 let activeRelationshipRequest = null;
 let relationshipInputTimer = null;
+let activePaidTarotRequest = null;
+let paidTarotInputTimer = null;
+let activeThreeCardRequest = null;
+let threeCardInputTimer = null;
 
 // CHAT filtresi: sohbet, sıra, bedava bakma ve provokasyon mesajlarını
 // Tarot kuyruğuna almadan önce ayıklar. Ses/yanıt akışına dokunmaz.
@@ -808,6 +812,77 @@ async function processQuestionQueue() {
       return;
     }
 
+    if (item.kind === "tarot" && item.giftReward && !item.questionProvided) {
+      activePaidTarotRequest = { id: item.id, username: item.username, nickname: item.nickname, item, resolved: false };
+      waitingForClientCompletion = item.id; // kuyruğu kullanıcı sorusu gelene kadar kilitli tut
+      if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
+      completionSafetyTimer = setTimeout(() => {
+        if (Number(waitingForClientCompletion) === Number(item.id)) {
+          console.log("QUEUE: Hediye tek kart için soru bekleme zaman aşımı:", item.id);
+          activePaidTarotRequest = null;
+          if (paidTarotInputTimer) { clearTimeout(paidTarotInputTimer); paidTarotInputTimer = null; }
+          waitingForClientCompletion = null;
+          completionSafetyTimer = null;
+          processingQuestion = false;
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+        }
+      }, 120000);
+      if (paidTarotInputTimer) clearTimeout(paidTarotInputTimer);
+      paidTarotInputTimer = setTimeout(() => {
+        if (activePaidTarotRequest && Number(activePaidTarotRequest.id) === Number(item.id) && !activePaidTarotRequest.resolved) {
+          // Süre dolarsa soru uydurmak yerine bu ödülü iptal et ve kuyruğu aç.
+          activePaidTarotRequest = null;
+          waitingForClientCompletion = null;
+          if (completionSafetyTimer) { clearTimeout(completionSafetyTimer); completionSafetyTimer = null; }
+          paidTarotInputTimer = null;
+          processingQuestion = false;
+          broadcast({ type: "gift_input_timeout", questionId: item.id, username: item.username, rewardKind: "tarot" });
+          console.log("HEDİYELİ TEK KART: 60 saniyede soru gelmedi; ödül iptal edildi:", item.username);
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+        }
+      }, 60000);
+      // Mevcut live.html tarot_start olayını kullanarak ekranda soru bekleme durumunu aç.
+      broadcast({ type: "tarot_start", questionId: item.id, username: item.username, question: "HEDİYE ALINDI — SORUNU SOHBETE YAZ", cardName: "", image: "", orientation: "upright", meaning: "" });
+      broadcast({ type: "gift_question_prompt", questionId: item.id, username: item.username, rewardKind: "tarot", prompt: "Sorunu sohbete yaz." });
+      console.log("HEDİYELİ TEK KART: Hediye sonrası soru bekleniyor:", item.username, "ID:", item.id);
+      return;
+    }
+
+    if (item.kind === "threecard" && item.giftReward && !item.questionProvided) {
+      activeThreeCardRequest = { id: item.id, username: item.username, nickname: item.nickname, item, resolved: false };
+      waitingForClientCompletion = item.id;
+      if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
+      completionSafetyTimer = setTimeout(() => {
+        if (Number(waitingForClientCompletion) === Number(item.id)) {
+          activeThreeCardRequest = null;
+          if (threeCardInputTimer) { clearTimeout(threeCardInputTimer); threeCardInputTimer = null; }
+          waitingForClientCompletion = null;
+          completionSafetyTimer = null;
+          processingQuestion = false;
+          console.log("QUEUE: Hediye üç kart için soru zaman aşımı:", item.id);
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+        }
+      }, 120000);
+      if (threeCardInputTimer) clearTimeout(threeCardInputTimer);
+      threeCardInputTimer = setTimeout(() => {
+        if (activeThreeCardRequest && Number(activeThreeCardRequest.id) === Number(item.id) && !activeThreeCardRequest.resolved) {
+          activeThreeCardRequest = null;
+          waitingForClientCompletion = null;
+          if (completionSafetyTimer) { clearTimeout(completionSafetyTimer); completionSafetyTimer = null; }
+          threeCardInputTimer = null;
+          processingQuestion = false;
+          broadcast({ type: "gift_input_timeout", questionId: item.id, username: item.username, rewardKind: "threecard" });
+          console.log("HEDİYELİ ÜÇ KART: 60 saniyede soru gelmedi; ödül iptal edildi:", item.username);
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
+        }
+      }, 60000);
+      // Mevcut istemciyi üç kart bekleme ekranına al; cevap ancak soru geldikten sonra hazırlanır.
+      broadcast({ type: "threecard_start", questionId: item.id, username: item.username, question: "HEDİYE ALINDI — SORUNU SOHBETE YAZ" });
+      broadcast({ type: "gift_question_prompt", questionId: item.id, username: item.username, rewardKind: "threecard", prompt: "Üç kart açılımı için sorunu sohbete yaz." });
+      console.log("HEDİYELİ ÜÇ KART: Hediye sonrası soru bekleniyor:", item.username, "ID:", item.id);
+      return;
+    }
+
     if (item.kind === "threecard") {
       broadcast({ type: "threecard_start", questionId: item.id, username: item.username });
       let reading = null;
@@ -1088,6 +1163,59 @@ function connectTikTok() {
         }
       }
 
+      // Hediye ile açılan tek kart: yalnızca hediyeyi gönderen kişinin
+      // hediye SONRASI yazdığı ilk soruyu kabul et.
+      if (activePaidTarotRequest && !activePaidTarotRequest.resolved) {
+        const currentUser = normalizeTurkishText(event.username || event.nickname || "");
+        const expectedUser = normalizeTurkishText(activePaidTarotRequest.username || activePaidTarotRequest.nickname || "");
+        if (currentUser && expectedUser && currentUser === expectedUser) {
+          const question = String(event.comment || "").trim();
+          if (question.length >= 3 && normalizeTurkishText(question) !== "cay") {
+            const item = activePaidTarotRequest.item;
+            activePaidTarotRequest.resolved = true;
+            item.question = question.slice(0, 400);
+            item.questionProvided = true;
+            const draw = drawOneCard();
+            item.card = draw.card;
+            item.orientation = draw.orientation;
+            item.meaning = draw.meaning;
+            if (paidTarotInputTimer) { clearTimeout(paidTarotInputTimer); paidTarotInputTimer = null; }
+            if (completionSafetyTimer) { clearTimeout(completionSafetyTimer); completionSafetyTimer = null; }
+            activePaidTarotRequest = null;
+            waitingForClientCompletion = null;
+            processingQuestion = false;
+            questionQueue.unshift(item);
+            console.log("HEDİYELİ TEK KART: Hediye sonrası soru alındı:", item.username, "=>", item.question);
+            processQuestionQueue();
+            return;
+          }
+        }
+      }
+
+      // Hediye ile açılan üç kart: soru gelmeden yorum üretme.
+      if (activeThreeCardRequest && !activeThreeCardRequest.resolved) {
+        const currentUser = normalizeTurkishText(event.username || event.nickname || "");
+        const expectedUser = normalizeTurkishText(activeThreeCardRequest.username || activeThreeCardRequest.nickname || "");
+        if (currentUser && expectedUser && currentUser === expectedUser) {
+          const question = String(event.comment || "").trim();
+          if (question.length >= 3 && normalizeTurkishText(question).replace(/\s+/g, "") !== "3kart") {
+            const item = activeThreeCardRequest.item;
+            activeThreeCardRequest.resolved = true;
+            item.question = question.slice(0, 400);
+            item.questionProvided = true;
+            if (threeCardInputTimer) { clearTimeout(threeCardInputTimer); threeCardInputTimer = null; }
+            if (completionSafetyTimer) { clearTimeout(completionSafetyTimer); completionSafetyTimer = null; }
+            activeThreeCardRequest = null;
+            waitingForClientCompletion = null;
+            processingQuestion = false;
+            questionQueue.unshift(item);
+            console.log("HEDİYELİ ÜÇ KART: Hediye sonrası soru alındı:", item.username, "=>", item.question);
+            processQuestionQueue();
+            return;
+          }
+        }
+      }
+
       // =========================
       // AKTİF İLİŞKİ OTURUMU: yalnızca açılımı başlatan izleyicinin sorusunu al
       // =========================
@@ -1108,147 +1236,10 @@ function connectTikTok() {
         }
       }
 
-      // =========================
-      // İLİŞKİ AÇILIMI TETİĞİ
-      // Sohbete yalnızca "ilişki" yazılması beş kartlı ilişki motorunu kuyruğa alır.
-      // =========================
-      if (normalizeTurkishText(event.comment) === "iliski") {
-        const item = {
-          id: ++questionId,
-          kind: "iliski",
-          username: event.username || event.nickname || "izleyici",
-          nickname: event.nickname,
-          question: "",
-          priority: false
-        };
-        questionQueue.push(item);
-        console.log("QUEUE: İlişki açılımı eklendi:", item.username, "| Bekleyen:", questionQueue.length);
-        processQuestionQueue();
-        return;
-      }
-
-      // =========================
-      // ÜÇ KART TAROT TETİĞİ
-      // Sohbete "3kart" yazılması üç kart açılımını sıraya ekler.
-      // =========================
-      if (normalizeTurkishText(event.comment).replace(/\s+/g, "") === "3kart") {
-        const item = {
-          id: ++questionId,
-          kind: "threecard",
-          username: event.username || event.nickname || "izleyici",
-          nickname: event.nickname,
-          question: "",
-          priority: false
-        };
-        questionQueue.push(item);
-        console.log("QUEUE: Üç kart açılımı eklendi:", item.username, "| Bekleyen:", questionQueue.length);
-        processQuestionQueue();
-        return;
-      }
-
-      // =========================
-      // BURÇ TEST TETİĞİ
-      // Sohbete yalnızca "burç" yazılması Burç motorunu kuyruğa alır.
-      // =========================
-      if (normalizeTurkishText(event.comment) === "burc") {
-        const item = {
-          id: ++questionId,
-          kind: "burc",
-          username: event.username || event.nickname || "izleyici",
-          nickname: event.nickname,
-          question: "Burç yorumu",
-          priority: false
-        };
-        questionQueue.push(item);
-        console.log("QUEUE: Burç yorumu eklendi:", item.username, "| Bekleyen:", questionQueue.length);
-        processQuestionQueue();
-        return;
-      }
-
-      // =========================
-      // SİHİRLİ MESAJ TEST TETİĞİ
-      // Sohbete yalnızca "hediye" yazılması özel mesajı kuyruğa alır.
-      // =========================
-      if (normalizeTurkishText(event.comment) === "hediye") {
-        const item = {
-          id: ++questionId,
-          kind: "magic",
-          username: event.username || event.nickname || "izleyici",
-          nickname: event.nickname,
-          question: "Sihirli Mesaj",
-          priority: false
-        };
-        questionQueue.push(item);
-        console.log("QUEUE: Sihirli Mesaj eklendi:", item.username, "| Bekleyen:", questionQueue.length);
-        processQuestionQueue();
-        return;
-      }
-
-      // =========================
-      // MESAJ FILTRESI
-      // =========================
-      const classification = classifyChatMessage(event.comment);
-      if (!classification.accept) {
-        console.log(
-          "FILTER: Mesaj Tarot kuyruğuna alınmadı:",
-          event.username,
-          "=>",
-          event.comment,
-          "| Neden:",
-          classification.reason
-        );
-        return;
-      }
-
-      if (isDuplicateQuestion(event.username, classification.normalized)) {
-        console.log(
-          "FILTER: Tekrarlanan soru atlandı:",
-          event.username,
-          "=>",
-          event.comment
-        );
-        return;
-      }
-
-      // =========================
-      // SORU + KART KUYRUĞA EKLE
-      // =========================
-
-      const draw =
-        drawOneCard();
-
-      const item = {
-        id: ++questionId,
-        username:
-          event.username,
-        nickname:
-          event.nickname,
-        question:
-          event.comment,
-        card:
-          draw.card,
-        orientation:
-          draw.orientation,
-        meaning:
-          draw.meaning,
-        retryCount: 0,
-        priority: false
-      };
-
-      questionQueue.push(item);
-
-      console.log(
-        "QUEUE: Soru eklendi:",
-        item.username,
-        "=>",
-        item.question,
-        "| Bekleyen:",
-        questionQueue.length
-      );
-
-      // Sadece boşta ise çalışır.
-      // Meşgulse mevcut kişi bitene kadar bekler.
-      processQuestionQueue();
+      // ÖNEMLİ: Hediye öncesi sohbet mesajları hiçbir işlem veya kuyruk oluşturmaz.
+      // Sohbet yalnızca aktif hediye oturumunda, o hediyeyi gönderen kişiden
+      // beklenen soru/burç bilgisini almak için yukarıdaki kontrollerde kullanılır.
+      console.log("CHAT: Aktif hediye oturumu için gerekli girdi yok; mesaj yok sayıldı:", event.username, "=>", event.comment);
     }
   );
 
@@ -1290,20 +1281,8 @@ function connectTikTok() {
         return;
       }
 
-      // Preserve the existing behaviour: prioritize this viewer's already queued question.
-      const user = String(username || "").toLocaleLowerCase("tr-TR");
-      const index = questionQueue.findIndex((item) =>
-        String(item.username || "").toLocaleLowerCase("tr-TR") === user
-      );
-      if (index > 0) {
-        const [item] = questionQueue.splice(index, 1);
-        item.priority = true;
-        questionQueue.unshift(item);
-        console.log("QUEUE: Hediye önceliği:", item.username);
-        broadcast({ type: "gift_priority", username: item.username });
-      } else if (index === 0) {
-        console.log("QUEUE: Kullanıcı zaten sıranın başında:", username);
-      }
+      // Hediye, geçmiş sohbet mesajlarını ödüle dönüştürmez. Her hediye
+      // kendi başına tek bir ödül görevi oluşturur; mevcut sıra bozulmaz.
 
       // Gift name is the primary key: coin count alone is not enough because
       // Balloon and Confetti both cost 100 coins but unlock different readings.
@@ -1355,8 +1334,8 @@ function connectTikTok() {
         item.retryCount = 0;
       }
 
-      // Gift rewards are queued next; an already-running reading is never interrupted.
-      questionQueue.unshift(item);
+      // Her hediye yalnızca bir kez kuyruğa eklenir; devam eden işlem kesilmez.
+      questionQueue.push(item);
       console.log("GIFT REWARD: Kuyruğa eklendi:", username, "=>", rewardLabels[rewardKind], "| Hediye:", giftName, "| Coin/diamond:", diamondCount || "bilinmiyor", "| Bekleyen:", questionQueue.length);
       broadcast({
         type: "gift_reward_queued",
