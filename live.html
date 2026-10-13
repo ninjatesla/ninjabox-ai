@@ -15,6 +15,12 @@
     .question-box{position:absolute;top:19%;left:4%;right:4%;padding:12px 15px;border-radius:16px;background:rgba(0,0,0,.68);border:1px solid rgba(255,255,255,.18);color:#fff;text-align:center;z-index:5}
     .username{font-size:17px;font-weight:bold;margin-bottom:5px}.question{font-size:clamp(17px,4.5vw,24px);font-weight:bold;line-height:1.2}
     .waiting-label{position:absolute;top:28.2%;left:50%;transform:translateX(-50%);width:90%;text-align:center;color:#fff;font-size:clamp(17px,4.5vw,23px);font-weight:700;text-shadow:0 2px 6px #000;z-index:4;display:none}
+    /* Bekleme ekranında soru kutusu panelin hemen altına, aynı sağ hizaya alınır. */
+    .live.waiting-mode .question-box{top:51%;left:auto;right:2.5%;width:min(43vw,230px);padding:8px 9px;border-radius:12px;background:rgba(0,0,0,.88);border:1px solid rgba(255,255,255,.25);}
+    .live.waiting-mode .question{font-size:clamp(12px,3.1vw,16px)}
+    .live.waiting-mode .username{font-size:clamp(10px,2.5vw,13px);margin-bottom:3px}
+    .live.waiting-mode .waiting-label{top:calc(51% + 62px);left:auto;right:2.5%;transform:none;width:min(43vw,230px);font-size:clamp(12px,3.1vw,16px);line-height:1.2}
+    @media(max-width:380px){.live.waiting-mode .question-box{right:2%;width:45vw;top:51%}.live.waiting-mode .waiting-label{right:2%;width:45vw;top:calc(51% + 58px)}}
     .card{position:absolute;top:28.2%;left:50%;transform:translateX(-50%);width:min(31vw,190px);max-height:40vh;object-fit:contain;border-radius:10px;box-shadow:0 10px 35px rgba(0,0,0,.9);z-index:3}
     .three-cards{position:absolute;top:28%;left:2%;right:2%;display:none;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;z-index:4}
     .three-card{min-width:0;text-align:center;color:#fff;text-shadow:0 2px 5px #000}
@@ -107,6 +113,8 @@
   function hideRelationshipCards(){if(relationshipCardsEl)relationshipCardsEl.style.display="none";}
   const interactionPanelEl=document.getElementById("interactionPanel");
   function hideInteractionPanel(){
+    const liveEl=document.querySelector(".live");
+    if(liveEl)liveEl.classList.remove("waiting-mode");
     if(interactionPanelEl){interactionPanelEl.style.display="none";interactionPanelEl.setAttribute("aria-hidden","true");}
   }
   function showInteractionPanel(){
@@ -115,6 +123,8 @@
   function showWaitingScreen(){
     usernameEl.textContent=""; questionEl.textContent=""; cardEl.style.display="none";
     hideThreeCards(); hideRelationshipCards(); answerEl.textContent=""; waitingLabelEl.style.display="block";
+    const liveEl=document.querySelector(".live");
+    if(liveEl)liveEl.classList.add("waiting-mode");
     showInteractionPanel();
   }
   function finishItemAfterDisplay(questionId, finishType){
