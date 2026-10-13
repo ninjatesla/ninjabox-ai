@@ -31,6 +31,11 @@
     .orientation,.answer,.chat-panel{display:none!important}.status{position:absolute;bottom:2%;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:10px;white-space:nowrap;z-index:8}
     .controls{position:fixed;bottom:5%;left:5%;right:5%;display:flex;gap:10px;z-index:9999}.control-button{flex:1;min-width:0;min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(0,0,0,.82);color:#fff;font-size:clamp(12px,3.2vw,15px);font-weight:700;padding:10px 6px}
     .reward-toast{display:none;position:absolute;left:5%;right:5%;bottom:13%;padding:12px 14px;border:1px solid rgba(255,215,0,.75);border-radius:14px;background:rgba(0,0,0,.88);color:#ffe58a;text-align:center;font-weight:700;font-size:clamp(14px,3.6vw,19px);z-index:20;text-shadow:0 1px 3px #000}
+    .interaction-panel{display:none;position:absolute;top:13.5%;right:2.5%;width:min(43vw,230px);z-index:30;border:1px solid rgba(255,218,100,.9);border-radius:13px;overflow:hidden;background:rgba(8,7,12,.93);box-shadow:0 0 14px rgba(255,201,66,.35);color:#fff;pointer-events:none}
+    .interaction-title{padding:7px 9px;text-align:center;color:#ffe7a0;font-weight:800;font-size:clamp(10px,2.8vw,14px);letter-spacing:.4px;border-bottom:1px solid rgba(255,215,100,.35)}
+    .interaction-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:5px;min-height:43px;padding:5px 7px;border-bottom:1px solid rgba(255,215,100,.22)}
+    .interaction-row:last-child{border-bottom:0}.interaction-name{font-size:clamp(10px,2.6vw,13px);font-weight:800;line-height:1.1}.interaction-price{font-size:clamp(9px,2.2vw,11px);color:#ffe7a0;white-space:nowrap;text-align:right}.interaction-gift{font-size:clamp(17px,4vw,22px);display:block;margin-bottom:1px}
+    @media(max-width:380px){.interaction-panel{width:45vw;right:2%;top:14%}.interaction-row{min-height:39px;padding:4px 5px}}
   </style>
 </head>
 <body>
@@ -44,6 +49,14 @@
     <div class="overlay">
       <div id="status" class="status">NinjaBox · Sesli yorum aktif</div>
       <div id="rewardToast" class="reward-toast"></div>
+      <div id="interactionPanel" class="interaction-panel" aria-hidden="true">
+        <div class="interaction-title">✨ NINJABOX ETKİLEŞİM ✨</div>
+        <div class="interaction-row"><div><span class="interaction-gift">🍩</span><div class="interaction-name">SİHİRLİ MESAJ</div></div><div class="interaction-price">Donat<br>🎁 30 coin</div></div>
+        <div class="interaction-row"><div><span class="interaction-gift">☕</span><div class="interaction-name">TEK KART TAROT</div></div><div class="interaction-price">Çay<br>🎁 50 coin</div></div>
+        <div class="interaction-row"><div><span class="interaction-gift">🎩</span><div class="interaction-name">BURÇ YORUMU</div></div><div class="interaction-price">Şapka<br>🎁 99 coin</div></div>
+        <div class="interaction-row"><div><span class="interaction-gift">🎈</span><div class="interaction-name">ÜÇ KART AÇILIMI</div></div><div class="interaction-price">Balon<br>🎁 100 coin</div></div>
+        <div class="interaction-row"><div><span class="interaction-gift">🎉</span><div class="interaction-name">İLİŞKİ AÇILIMI</div></div><div class="interaction-price">Konfeti<br>🎁 100 coin</div></div>
+      </div>
       <div id="orientation" class="orientation">TAROT</div>
       <img id="card" class="card" src="" alt="Tarot Kartı" style="display:none;">
       <div id="relationshipCards" class="relationship-cards">
@@ -92,9 +105,17 @@
   }
   function hideThreeCards(){if(threeCardsEl)threeCardsEl.style.display="none";}
   function hideRelationshipCards(){if(relationshipCardsEl)relationshipCardsEl.style.display="none";}
+  const interactionPanelEl=document.getElementById("interactionPanel");
+  function hideInteractionPanel(){
+    if(interactionPanelEl){interactionPanelEl.style.display="none";interactionPanelEl.setAttribute("aria-hidden","true");}
+  }
+  function showInteractionPanel(){
+    if(interactionPanelEl){interactionPanelEl.style.display="block";interactionPanelEl.setAttribute("aria-hidden","false");}
+  }
   function showWaitingScreen(){
     usernameEl.textContent=""; questionEl.textContent=""; cardEl.style.display="none";
-    hideThreeCards(); answerEl.textContent=""; waitingLabelEl.style.display="block";
+    hideThreeCards(); hideRelationshipCards(); answerEl.textContent=""; waitingLabelEl.style.display="block";
+    showInteractionPanel();
   }
   function finishItemAfterDisplay(questionId, finishType){
     if(displayCleanupTimer) clearTimeout(displayCleanupTimer);
@@ -140,7 +161,7 @@
   }
   function playThreeCardIntro(){ setBackground("3kart.mp4"); }
 
-  socket.onopen=()=>{answerEl.textContent="Tarot LIVE hazır. Sorunu sohbete yaz...";};
+  socket.onopen=()=>{answerEl.textContent="";showWaitingScreen();};
   socket.onmessage=(event)=>{
     try{
       const data=JSON.parse(event.data);
@@ -161,7 +182,7 @@
         return;
       }
       if(data.type==="tarot_start"){
-        activeQuestionId=data.questionId; setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
+        activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         waitingLabelEl.style.display="none";
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -173,13 +194,14 @@
         return;
       }
       if(data.type==="tarot_answer"){
+        hideInteractionPanel();
         if(Number(data.questionId)!==Number(activeQuestionId))return;
         answerEl.textContent=data.answer||"";
         speakAnswer(data.answer||"",()=>finishItemAfterDisplay(data.questionId,"tarot_finished"));
         return;
       }
       if(data.type==="burc_start"){
-        activeQuestionId=data.questionId; setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
+        activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         if(burcIntroAudio){burcIntroAudio.pause();burcIntroAudio.currentTime=0;}
@@ -191,6 +213,7 @@
         return;
       }
       if(data.type==="burc_answer"){
+        hideInteractionPanel();
         if(Number(data.questionId)!==Number(activeQuestionId))return;
         if(burcIntroAudio){burcIntroAudio.pause();burcIntroAudio.currentTime=0;}
         questionEl.textContent=data.sunSign ? `${data.sunSign}${data.risingSign?" · Yükselen "+data.risingSign:""}` : "Burç bilgisi alınamadı";
@@ -199,7 +222,7 @@
         return;
       }
       if(data.type==="magic_start"){
-        activeQuestionId=data.questionId;
+        activeQuestionId=data.questionId; hideInteractionPanel();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         waitingLabelEl.style.display="none";
@@ -209,12 +232,13 @@
         return;
       }
       if(data.type==="magic_answer"){
+        hideInteractionPanel();
         if(Number(data.questionId)!==Number(activeQuestionId))return;
         speakAnswer(data.answer||"",()=>{setBackground("tarot.mp4");finishItemAfterDisplay(data.questionId,"magic_finished");});
         return;
       }
       if(data.type==="iliski_start"){
-        activeQuestionId=data.questionId;
+        activeQuestionId=data.questionId; hideInteractionPanel();
         hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -232,6 +256,7 @@
         return;
       }
       if(data.type==="iliski_answer"){
+        hideInteractionPanel();
         if(Number(data.questionId)!==Number(activeQuestionId))return;
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -255,7 +280,7 @@
       }
 
       if(data.type==="threecard_start"){
-        activeQuestionId=data.questionId;
+        activeQuestionId=data.questionId; hideInteractionPanel();
         setBackground("tarot.mp4");
         hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
@@ -269,6 +294,7 @@
         return;
       }
       if(data.type==="threecard_answer"){
+        hideInteractionPanel();
         if(Number(data.questionId)!==Number(activeQuestionId))return;
         setBackground("tarot.mp4");
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}

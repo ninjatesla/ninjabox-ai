@@ -1236,9 +1236,37 @@ function connectTikTok() {
         }
       }
 
-      // ÖNEMLİ: Hediye öncesi sohbet mesajları hiçbir işlem veya kuyruk oluşturmaz.
-      // Sohbet yalnızca aktif hediye oturumunda, o hediyeyi gönderen kişiden
-      // beklenen soru/burç bilgisini almak için yukarıdaki kontrollerde kullanılır.
+      // TEST İZNİ: Yalnızca yayın sahibi @ninjaboxx hediye olmadan Tarot sorusu sorabilir.
+      // Diğer izleyicilerin hediye ile açılan soru/cevap akışı değiştirilmez.
+      const broadcasterTester = normalizeTurkishText(event.username || "") === "ninjaboxx";
+      if (broadcasterTester && !processingQuestion && waitingForClientCompletion === null) {
+        const testQuestion = String(event.comment || "").trim();
+        const classification = classifyChatMessage(testQuestion);
+        if (testQuestion.length >= 3 && (classification.accept || /[?？]/.test(testQuestion))) {
+          const draw = drawOneCard();
+          const item = {
+            id: ++questionId,
+            kind: "tarot",
+            username: event.username || "ninjaboxx",
+            nickname: event.nickname || event.username || "ninjaboxx",
+            question: testQuestion.slice(0, 400),
+            card: draw.card,
+            orientation: draw.orientation,
+            meaning: draw.meaning,
+            priority: true,
+            giftReward: false,
+            broadcasterTest: true,
+            questionProvided: true,
+            retryCount: 0
+          };
+          questionQueue.unshift(item);
+          console.log("BROADCASTER TEST: Hediye gerektirmeyen soru kuyruğa alındı:", item.username, "=>", item.question);
+          processQuestionQueue();
+          return;
+        }
+      }
+
+      // Diğer tüm izleyicilerde hediye öncesi sohbet mesajları işlem/kuyruk oluşturmaz.
       console.log("CHAT: Aktif hediye oturumu için gerekli girdi yok; mesaj yok sayıldı:", event.username, "=>", event.comment);
     }
   );
