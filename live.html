@@ -52,7 +52,6 @@
   <div class="live">
     <video id="backgroundVideo" class="background-video" src="/tarot.mp4" autoplay muted loop playsinline></video>
     <audio id="burcIntroAudio" src="/burc.mp3" preload="auto"></audio>
-    <audio id="backgroundMusic" preload="auto"></audio>
     <div class="overlay">
       <div id="status" class="status">NinjaBox · Sesli yorum aktif</div>
       <div id="rewardToast" class="reward-toast"></div>
@@ -97,178 +96,19 @@
   let rewardToastTimer=null;
   const backgroundVideo=document.getElementById("backgroundVideo");
   const burcIntroAudio=document.getElementById("burcIntroAudio");
-  const backgroundMusic=document.getElementById("backgroundMusic");
-
-  // Doğal bekleme akışı: bu dosyalar ana dizinde bulunmalı.
-  const naturalClips=[
-    "kahveicme.mp4",
-    "ayagakalkma.mp4",
-    "mumyakma.mp4",
-    "tutsuyakma.mp4",
-    "kalemyazma.mp4",
-    "sohbetbildirim.mp4",
-    "kartduzenleme.mp4",
-    "masayaoturkartlarikaristir.mp4"
-  ];
-  const musicTracks=["muzik1.mp3","muzik2.mp3","muzik3.mp3","muzik4.mp3"];
-  let naturalFlowEnabled=true;
-  let naturalClipTimer=null;
-  let naturalEndedHandler=null;
-  let chatClipLoops=0;
-  let chatModeUntil=0;
-  let lastNaturalClip="";
-  let lastMusicTrack="";
-  let speechActive=false;
-  let musicBaseVolume=0.22;
-  let lastSmokePrompt=-1;
-  let lastWaitingPrompt=-1;
-  let waitingPromptTimer=null;
-  let chatModeTimer=null;
-
-  const smokePrompts=[
-    "Yayını beğenmeyi ve paylaşmayı unutmayın; desteğiniz NinjaBox için çok değerli.",
-    "Aklınızda bir soru varsa, uygun hediye ile sorunuzu gönderebilirsiniz.",
-    "NinjaBox'a hoş geldiniz. Birazdan kartlarımızla devam edeceğiz.",
-    "Yayını beğenip paylaşarak daha fazla kişiye ulaşmamıza yardımcı olabilirsiniz.",
-    "İlişki, aşk veya iş konusunda merak ettiğiniz bir soru varsa hazır olduğunuzda gönderebilirsiniz.",
-    "Burada biraz sakinleşip kartlarımızı hazırlıyoruz; hoş geldiniz.",
-    "Yayını beğenmeyi unutmayın. Yeni sorular için etkileşim panelindeki seçeneklere bakabilirsiniz.",
-    "Kafanızda bir soru varsa acele etmeyin; sorunuzu hazır ettiğinizde gönderebilirsiniz.",
-    "Paylaşımınız ve beğeniniz yayının daha fazla kişiye ulaşmasına destek olur.",
-    "Kartları hazırlıyoruz. Hazır olduğunuzda etkileşim panelinden bir açılım seçebilirsiniz."
-  ];
-  const waitingPrompts=[
-    "Yayınımızı beğenmeyi unutmayalım. Yeni sorunuz varsa hazır olduğunuzda gönderebilirsiniz.",
-    "Sorunuz varsa etkileşim panelindeki hediye seçeneklerinden yararlanabilirsiniz.",
-    "NinjaBox'a destek olmak için yayını beğenip paylaşabilirsiniz. Yeni sorularınızı bekliyoruz.",
-    "Bir sonraki açılım için hazırım. Merak ettiğiniz soruyu uygun hediye ile gönderebilirsiniz.",
-    "Yayında bizimle olduğunuz için teşekkürler. Beğeni ve paylaşım desteğinizi bekliyoruz.",
-    "Aklınızda yeni bir soru varsa etkileşim panelinden açılımınızı seçebilirsiniz.",
-    "Kartlarımızı yeniden hazırlıyoruz. Yayını beğenmeyi ve paylaşmayı unutmayın.",
-    "Yeni bir soru için hazır olduğunuzda gönderebilirsiniz; sırayla ilgileneceğiz.",
-    "Burada olduğunuz için teşekkür ederiz. Yayını beğenip paylaşarak destek olabilirsiniz.",
-    "Yeni sorularınızı bekliyoruz. Hangi açılımın ne kadar olduğunu sağdaki panelden görebilirsiniz."
-  ];
-
-  function pickDifferent(list,lastIndex){
-    if(list.length<2)return 0;
-    let i=Math.floor(Math.random()*list.length);
-    while(i===lastIndex)i=Math.floor(Math.random()*list.length);
-    return i;
-  }
-  function pickDifferentName(list,lastName){
-    if(list.length<2)return list[0];
-    let name=list[Math.floor(Math.random()*list.length)];
-    while(name===lastName)name=list[Math.floor(Math.random()*list.length)];
-    return name;
-  }
-  function startNextMusic(){
-    if(!backgroundMusic || !naturalFlowEnabled)return;
-    const track=pickDifferentName(musicTracks,lastMusicTrack);
-    lastMusicTrack=track;
-    backgroundMusic.src="/"+track;
-    backgroundMusic.loop=false;
-    backgroundMusic.volume=speechActive?0.045:musicBaseVolume;
-    backgroundMusic.play().catch(()=>{});
-  }
-  if(backgroundMusic){
-    backgroundMusic.addEventListener("ended",startNextMusic);
-    backgroundMusic.addEventListener("error",()=>{if(naturalFlowEnabled)setTimeout(startNextMusic,1200);});
-  }
-  function duckMusicForSpeech(){
-    speechActive=true;
-    if(backgroundMusic)backgroundMusic.volume=0.045;
-  }
-  function restoreMusicAfterSpeech(){
-    speechActive=false;
-    if(backgroundMusic && !backgroundMusic.paused)backgroundMusic.volume=musicBaseVolume;
-  }
-  function speakRandomPrompt(list,which){
-    if(!naturalFlowEnabled || activeQuestionId!==null)return;
-    let index=which==="smoke"?pickDifferent(list,lastSmokePrompt):pickDifferent(list,lastWaitingPrompt);
-    if(which==="smoke")lastSmokePrompt=index;else lastWaitingPrompt=index;
-    speakAnswer(list[index]);
-  }
-  function stopNaturalClipSchedule(){
-    if(naturalClipTimer){clearTimeout(naturalClipTimer);naturalClipTimer=null;}
-    if(naturalEndedHandler){backgroundVideo.removeEventListener("ended",naturalEndedHandler);naturalEndedHandler=null;}
-    // Soru/cevap sırasında aktif videonun kendi kendine bitip siyah kalmasını önle.
-    backgroundVideo.loop=true;
-  }
-  function scheduleNextNaturalClip(delay=900){
-    if(naturalClipTimer)clearTimeout(naturalClipTimer);
-    naturalClipTimer=setTimeout(()=>{naturalClipTimer=null;playNextNaturalClip();},delay);
-  }
-  function playNextNaturalClip(){
-    if(!naturalFlowEnabled || activeQuestionId!==null)return;
-    const clip=pickDifferentName(naturalClips,lastNaturalClip);
-    lastNaturalClip=clip;
-    if(naturalEndedHandler){backgroundVideo.removeEventListener("ended",naturalEndedHandler);naturalEndedHandler=null;}
-    setBackground(clip);
-    // Tütsü sahnesinde her seferinde farklı, kısa ve doğal bir hatırlatma.
-    if(clip==="tutsuyakma.mp4"){
-      const delay=1800+Math.floor(Math.random()*1200);
-      setTimeout(()=>speakRandomPrompt(smokePrompts,"smoke"),delay);
-    }
-    if(clip==="sohbetbildirim.mp4"){
-      chatClipLoops=0;
-      chatModeUntil=Date.now()+60000;
-      if(chatModeTimer)clearTimeout(chatModeTimer);
-      chatModeTimer=setTimeout(()=>{chatModeUntil=0;},60000);
-    } else {
-      chatModeUntil=0;
-      if(chatModeTimer)clearTimeout(chatModeTimer);
-    }
-    // Doğal sahneler video bitince sıradaki sahneye geçer.
-    backgroundVideo.loop=false;
-    const onEnded=()=>{
-      backgroundVideo.removeEventListener("ended",onEnded);
-      if(naturalEndedHandler===onEnded)naturalEndedHandler=null;
-      if(clip==="sohbetbildirim.mp4" && chatClipLoops<9 && activeQuestionId===null){
-        chatClipLoops++;
-        backgroundVideo.currentTime=0;
-        backgroundVideo.play().catch(()=>{});
-        return;
-      }
-      chatModeUntil=0;
-      scheduleNextNaturalClip(700+Math.floor(Math.random()*1100));
-    };
-    naturalEndedHandler=onEnded;
-    backgroundVideo.addEventListener("ended",onEnded);
-  }
-  function startNaturalFlow(){
-    naturalFlowEnabled=true;
-    if(backgroundMusic && backgroundMusic.paused)startNextMusic();
-    if(activeQuestionId===null)scheduleNextNaturalClip(500);
-  }
-  function stopNaturalFlow(){
-    naturalFlowEnabled=false;
-    if(naturalClipTimer){clearTimeout(naturalClipTimer);naturalClipTimer=null;}
-    if(chatModeTimer){clearTimeout(chatModeTimer);chatModeTimer=null;}
-    chatModeUntil=0;
-    if(backgroundMusic){backgroundMusic.pause();backgroundMusic.currentTime=0;}
-    if("speechSynthesis" in window)window.speechSynthesis.cancel();
-    speechActive=false;
-  }
   let activeQuestionId=null, displayCleanupTimer=null, finishSafetyTimer=null;
   const socket=new WebSocket("wss://ninjabox-ai-production.up.railway.app");
 
   function setBackground(file){
     const wanted="/"+file;
-    backgroundVideo.loop=true;
     if(!backgroundVideo.getAttribute("src")?.endsWith(wanted)){
       backgroundVideo.src=wanted;
       backgroundVideo.load();
     }
+    backgroundVideo.loop=true;
     const playPromise=backgroundVideo.play();
-    if(playPromise && typeof playPromise.catch==="function") playPromise.catch(error=>console.warn("Video oynatma bekliyor:",file,error?.message||error));
+    if(playPromise && typeof playPromise.catch==="function") playPromise.catch(()=>{});
   }
-  backgroundVideo.addEventListener("error",()=>{
-    const current=backgroundVideo.getAttribute("src")||"";
-    console.error("Arka plan videosu yüklenemedi:",current);
-    // Bir doğal sahne yüklenemezse ana videoya dön; siyah ekranda kalma.
-    if(!current.endsWith("/tarot.mp4")) setTimeout(()=>setBackground("tarot.mp4"),250);
-  });
   function hideThreeCards(){if(threeCardsEl)threeCardsEl.style.display="none";}
   function hideRelationshipCards(){if(relationshipCardsEl)relationshipCardsEl.style.display="none";}
   const interactionPanelEl=document.getElementById("interactionPanel");
@@ -286,13 +126,6 @@
     const liveEl=document.querySelector(".live");
     if(liveEl)liveEl.classList.add("waiting-mode");
     showInteractionPanel();
-    activeQuestionId=null;
-    startNaturalFlow();
-    if(waitingPromptTimer)clearTimeout(waitingPromptTimer);
-    // Cevap sonrası bekleme ekranında tek bir kısa hatırlatma.
-    waitingPromptTimer=setTimeout(()=>{
-      if(activeQuestionId===null && naturalFlowEnabled) speakRandomPrompt(waitingPrompts,"waiting");
-    },1800);
   }
   function finishItemAfterDisplay(questionId, finishType){
     if(displayCleanupTimer) clearTimeout(displayCleanupTimer);
@@ -309,7 +142,6 @@
   function speakAnswer(text,onFinished){
     if(!text || !("speechSynthesis" in window)){if(onFinished)onFinished();return;}
     window.speechSynthesis.cancel();
-    duckMusicForSpeech();
     const utterance=new SpeechSynthesisUtterance(text);
     utterance.lang="tr-TR";
     const voices=window.speechSynthesis.getVoices();
@@ -321,7 +153,7 @@
     utterance.pitch=[0.94,1.0,1.04,1.08][Math.floor(Math.random()*4)];
     utterance.volume=1;
     let ended=false;
-    const complete=()=>{if(ended)return;ended=true;restoreMusicAfterSpeech();if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}if(onFinished)onFinished();};
+    const complete=()=>{if(ended)return;ended=true;if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}if(onFinished)onFinished();};
     utterance.onend=complete; utterance.onerror=complete;
     window.speechSynthesis.speak(utterance);
     if(onFinished) finishSafetyTimer=setTimeout(complete,90000);
@@ -344,6 +176,20 @@
     try{
       const data=JSON.parse(event.data);
       console.log("LIVE EVENT:",data);
+      if(data.type==="gift_input_timeout"){
+        if(Number(data.questionId)!==Number(activeQuestionId)) return;
+        if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
+        if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
+        if(window.speechSynthesis) window.speechSynthesis.cancel();
+        activeQuestionId=null;
+        setBackground("tarot.mp4");
+        showWaitingScreen();
+        answerEl.textContent="SÜRE DOLDU — YENİ SORU BEKLENİYOR";
+        speakAnswer("Süre doldu. Yeni soru bekleniyor.");
+        setTimeout(()=>{if(!activeQuestionId){answerEl.textContent="";showWaitingScreen();}},4500);
+        console.log("GİRDİ SÜRESİ DOLDU: Bekleme ekranına dönüldü:",data.rewardKind);
+        return;
+      }
       if(data.type==="free_tarot_prompt"){
         const promptText=data.isModerator
           ? `${data.username||"Moderatör"}, ${Number(data.threshold||30000).toLocaleString("tr-TR")} beğeni ödülün hazır. Ücretsiz Tarot için sorunu sohbete yaz.`
@@ -360,7 +206,7 @@
         return;
       }
       if(data.type==="tarot_start"){
-        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
+        activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         waitingLabelEl.style.display="none";
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -379,7 +225,7 @@
         return;
       }
       if(data.type==="burc_start"){
-        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
+        activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         if(burcIntroAudio){burcIntroAudio.pause();burcIntroAudio.currentTime=0;}
@@ -400,7 +246,7 @@
         return;
       }
       if(data.type==="magic_start"){
-        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel();
+        activeQuestionId=data.questionId; hideInteractionPanel();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         waitingLabelEl.style.display="none";
@@ -416,7 +262,7 @@
         return;
       }
       if(data.type==="iliski_start"){
-        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel();
+        activeQuestionId=data.questionId; hideInteractionPanel();
         hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -458,14 +304,14 @@
       }
 
       if(data.type==="threecard_start"){
-        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel();
+        activeQuestionId=data.questionId; hideInteractionPanel();
         setBackground("tarot.mp4");
         hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         waitingLabelEl.style.display="none";
         usernameEl.textContent=data.username?"@"+data.username:"";
-        questionEl.textContent="ÜÇ KART AÇILIMI HAZIRLANIYOR";
+        questionEl.textContent=data.question||"ÜÇ KART AÇILIMI HAZIRLANIYOR";
         cardEl.style.display="none";
         answerEl.textContent="";
         playThreeCardIntro();
@@ -498,9 +344,7 @@
   socket.onclose=()=>console.log("WebSocket bağlantısı kapandı.");
   if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
   const voiceTestButton=document.getElementById("voiceTestButton");
-  if(voiceTestButton) voiceTestButton.onclick=()=>{startNaturalFlow();speakAnswer("Merhaba. NinjaBox ses testi çalışıyor.");};
-  // Mobil tarayıcılarda müzik otomatik başlamazsa ilk dokunuşta ses akışını başlat.
-  document.addEventListener("pointerdown",()=>{if(naturalFlowEnabled && backgroundMusic && backgroundMusic.paused)startNextMusic();},{once:true});
+  if(voiceTestButton) voiceTestButton.onclick=()=>speakAnswer("Merhaba. NinjaBox ses testi çalışıyor.");
 </script>
 </body>
 </html>

@@ -55,6 +55,7 @@ let threeCardInputTimer = null;
 // CHAT filtresi: sohbet, sıra, bedava bakma ve provokasyon mesajlarını
 // Tarot kuyruğuna almadan önce ayıklar. Ses/yanıt akışına dokunmaz.
 const recentQuestionKeys = new Map();
+const recentGiftEventIds = new Map();
 const DEDUPE_WINDOW_MS = 90 * 1000;
 
 function normalizeTurkishText(value = "") {
@@ -728,6 +729,10 @@ async function processQuestionQueue() {
       };
       waitingForClientCompletion = item.id;
       broadcast({ type: "burc_start", questionId: item.id, username: item.username });
+      if (item.broadcasterTest) {
+        resolveBurcRequest(activeBurcRequest, { sunSign: "Koç", risingSign: null }).catch(error => console.error("BURÇ test açılımı hatası:", error.message || error));
+        return;
+      }
       if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
       completionSafetyTimer = setTimeout(() => {
         if (Number(waitingForClientCompletion) === Number(item.id)) {
@@ -743,7 +748,12 @@ async function processQuestionQueue() {
       if (burcInputTimer) clearTimeout(burcInputTimer);
       burcInputTimer = setTimeout(() => {
         if (activeBurcRequest && Number(activeBurcRequest.id) === Number(item.id) && !activeBurcRequest.resolved) {
-          resolveBurcRequest(activeBurcRequest, null).catch(error => console.error("BURÇ zaman aşımı yorumu hatası:", error.message));
+          activeBurcRequest = null; waitingForClientCompletion = null;
+          if (completionSafetyTimer) { clearTimeout(completionSafetyTimer); completionSafetyTimer = null; }
+          burcInputTimer = null; processingQuestion = false;
+          broadcast({ type: "gift_input_timeout", questionId: item.id, username: item.username, rewardKind: "burc" });
+          console.log("BURÇ: 60 saniyede bilgi gelmedi; açılım iptal edildi:", item.username);
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
         }
       }, 60000);
       console.log("BURÇ: Bilgi bekleniyor (60 sn):", item.username, "ID:", item.id);
@@ -790,6 +800,10 @@ async function processQuestionQueue() {
       };
       waitingForClientCompletion = item.id;
       broadcast({ type: "iliski_start", questionId: item.id, username: item.username });
+      if (item.broadcasterTest) {
+        resolveRelationshipRequest(activeRelationshipRequest, "Yayın sahibi test ilişki açılımı").catch(error => console.error("İLİŞKİ test açılımı hatası:", error.message || error));
+        return;
+      }
       if (completionSafetyTimer) clearTimeout(completionSafetyTimer);
       completionSafetyTimer = setTimeout(() => {
         if (Number(waitingForClientCompletion) === Number(item.id)) {
@@ -805,7 +819,12 @@ async function processQuestionQueue() {
       if (relationshipInputTimer) clearTimeout(relationshipInputTimer);
       relationshipInputTimer = setTimeout(() => {
         if (activeRelationshipRequest && Number(activeRelationshipRequest.id) === Number(item.id) && !activeRelationshipRequest.resolved) {
-          resolveRelationshipRequest(activeRelationshipRequest, null).catch(error => console.error("İLİŞKİ zaman aşımı yorumu hatası:", error.message || error));
+          activeRelationshipRequest = null; waitingForClientCompletion = null;
+          if (completionSafetyTimer) { clearTimeout(completionSafetyTimer); completionSafetyTimer = null; }
+          relationshipInputTimer = null; processingQuestion = false;
+          broadcast({ type: "gift_input_timeout", questionId: item.id, username: item.username, rewardKind: "iliski" });
+          console.log("İLİŞKİ: 60 saniyede soru gelmedi; açılım iptal edildi:", item.username);
+          if (questionQueue.length > 0) setTimeout(processQuestionQueue, 100);
         }
       }, 60000);
       console.log("İLİŞKİ: İzleyicinin sorusu bekleniyor (60 sn):", item.username, "ID:", item.id);
@@ -889,7 +908,11 @@ async function processQuestionQueue() {
       try {
         // Motorun AI denemeleri 12 saniyeyi aşabilir. Erken kesmek kartları
         // boş gönderip ekranda kırık görsel oluşmasına neden oluyordu.
-        reading = await createThreeCardReading({ username: item.username, question: item.question || "" });
+        reading = await Promise.race([
+          createThreeCardReading({ username: item.username, question: item.question || "" }),
+          new Promise((resolve) => setTimeout(() => resolve(null), 15000))
+        ]);
+        if (!reading) console.warn("3 KART: Yorum motoru 15 saniyeyi aştı; güvenli yedek yorum kullanılacak.");
       } catch (error) {
         console.error("3 KART: Motor hatası:", error.message || error);
         const cards = pickThreeCards();
@@ -1143,6 +1166,43 @@ function connectTikTok() {
         event.comment
       );
 
+      // YAYIN SAHİBİ TEST KOMUTLARI: yalnızca @ninjaboxx kullanabilir.
+      // Komutlar hediye gerektirmez ve normal izleyicilere açık değildir.
+      const broadcasterTester = normalizeTurkishText(event.username || event.nickname || "") === "ninjaboxx";
+      const ownerCommand = normalizeTurkishText(event.comment).replace(/\s+/g, " ");
+      if (broadcasterTester) {
+        const ownerKinds = {
+          "sihirli": "magic",
+          "iliski": "iliski",
+          "burc": "burc",
+          "tek kart": "tarot",
+          "3kart": "threecard"
+        };
+        const ownerKind = ownerKinds[ownerCommand];
+        if (ownerKind) {
+          const item = {
+            id: ++questionId,
+            kind: ownerKind,
+            username: event.username || "ninjaboxx",
+            nickname: event.nickname || event.username || "ninjaboxx",
+            question: ownerKind === "threecard" ? "Yayın sahibi test açılımı" : ownerKind === "tarot" ? "Yayın sahibi tek kart test açılımı" : ownerKind === "iliski" ? "Yayın sahibi test ilişki açılımı" : ownerKind === "burc" ? "Koç" : "",
+            priority: true,
+            giftReward: false,
+            broadcasterTest: true,
+            questionProvided: true,
+            retryCount: 0
+          };
+          if (ownerKind === "tarot") {
+            const draw = drawOneCard();
+            item.card = draw.card; item.orientation = draw.orientation; item.meaning = draw.meaning;
+          }
+          questionQueue.push(item);
+          console.log("BROADCASTER COMMAND: Test açılımı kuyruğa eklendi:", ownerCommand, "=>", ownerKind, "| ID:", item.id);
+          processQuestionQueue();
+          return;
+        }
+      }
+
       // =========================
       // AKTİF BURÇ OTURUMU: yalnızca sıradaki kişinin kendi mesajını kabul et
       // =========================
@@ -1238,7 +1298,6 @@ function connectTikTok() {
 
       // TEST İZNİ: Yalnızca yayın sahibi @ninjaboxx hediye olmadan Tarot sorusu sorabilir.
       // Diğer izleyicilerin hediye ile açılan soru/cevap akışı değiştirilmez.
-      const broadcasterTester = normalizeTurkishText(event.username || "") === "ninjaboxx";
       if (broadcasterTester) {
         const testQuestion = String(event.comment || "").trim();
         const classification = classifyChatMessage(testQuestion);
@@ -1299,6 +1358,16 @@ function connectTikTok() {
       const repeatCount = Number(data.repeatCount || 1);
       const giftType = Number(data.giftType || 0);
       const repeatEnd = data.repeatEnd;
+      const giftEventId = data.common?.msgId || data.common?.messageId || data.msgId || data.eventId || data.logId || null;
+      if (giftEventId) {
+        const now = Date.now();
+        for (const [id, timestamp] of recentGiftEventIds) if (now - timestamp > 120000) recentGiftEventIds.delete(id);
+        if (recentGiftEventIds.has(String(giftEventId))) {
+          console.warn("GIFT: Yinelenen aynı TikTok olay kimliği atlandı:", giftEventId, username, giftName);
+          return;
+        }
+        recentGiftEventIds.set(String(giftEventId), now);
+      }
 
       console.log("GIFT:", username, "| ad:", giftName || "BİLİNMİYOR", "| coin/diamond:", diamondCount || "BİLİNMİYOR", "| giftId:", giftId, "| tekrar:", repeatCount, "| repeatEnd:", repeatEnd);
       console.log("GIFT RAW:", JSON.stringify(data));
