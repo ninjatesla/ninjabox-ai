@@ -97,7 +97,20 @@
   const backgroundVideo=document.getElementById("backgroundVideo");
   const burcIntroAudio=document.getElementById("burcIntroAudio");
   let activeQuestionId=null, displayCleanupTimer=null, finishSafetyTimer=null;
-  const socket=new WebSocket("wss://ninjabox-ai-production.up.railway.app");
+  let socket=null;
+  let socketReconnectTimer=null;
+  function connectSocket(){
+    if(socket && (socket.readyState===WebSocket.OPEN || socket.readyState===WebSocket.CONNECTING)) return;
+    socket=new WebSocket("wss://ninjabox-ai-production.up.railway.app");
+    socket.onopen=handleSocketOpen;
+    socket.onmessage=handleSocketMessage;
+    socket.onerror=(error)=>{console.error("WebSocket error:",error);};
+    socket.onclose=()=>{
+      console.log("WebSocket bağlantısı kapandı; 2 saniye içinde yeniden bağlanılacak.");
+      if(socketReconnectTimer)clearTimeout(socketReconnectTimer);
+      socketReconnectTimer=setTimeout(()=>{socketReconnectTimer=null;connectSocket();},2000);
+    };
+  }
 
   function setBackground(file){
     const wanted="/"+file;
@@ -171,8 +184,8 @@
   }
   function playThreeCardIntro(){ setBackground("3kart.mp4"); }
 
-  socket.onopen=()=>{answerEl.textContent="";showWaitingScreen();};
-  socket.onmessage=(event)=>{
+  function handleSocketOpen(){answerEl.textContent="";showWaitingScreen();}
+  function handleSocketMessage(event){
     try{
       const data=JSON.parse(event.data);
       console.log("LIVE EVENT:",data);
@@ -339,9 +352,8 @@
         return;
       }
     }catch(error){console.error("LIVE event error:",error);}
-  };
-  socket.onerror=(error)=>{console.error("WebSocket error:",error);answerEl.textContent="LIVE bağlantısı kurulamadı.";};
-  socket.onclose=()=>console.log("WebSocket bağlantısı kapandı.");
+  }
+  connectSocket();
   if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
   const voiceTestButton=document.getElementById("voiceTestButton");
   if(voiceTestButton) voiceTestButton.onclick=()=>speakAnswer("Merhaba. NinjaBox ses testi çalışıyor.");
