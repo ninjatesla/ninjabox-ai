@@ -1239,7 +1239,7 @@ function connectTikTok() {
       // TEST İZNİ: Yalnızca yayın sahibi @ninjaboxx hediye olmadan Tarot sorusu sorabilir.
       // Diğer izleyicilerin hediye ile açılan soru/cevap akışı değiştirilmez.
       const broadcasterTester = normalizeTurkishText(event.username || "") === "ninjaboxx";
-      if (broadcasterTester && !processingQuestion && waitingForClientCompletion === null) {
+      if (broadcasterTester) {
         const testQuestion = String(event.comment || "").trim();
         const classification = classifyChatMessage(testQuestion);
         if (testQuestion.length >= 3 && (classification.accept || /[?？]/.test(testQuestion))) {
@@ -1259,8 +1259,8 @@ function connectTikTok() {
             questionProvided: true,
             retryCount: 0
           };
-          questionQueue.unshift(item);
-          console.log("BROADCASTER TEST: Hediye gerektirmeyen soru kuyruğa alındı:", item.username, "=>", item.question);
+          questionQueue.push(item);
+          console.log("BROADCASTER TEST: Soru sıraya alındı (FIFO):", item.username, "=>", item.question, "| Bekleyen:", questionQueue.length);
           processQuestionQueue();
           return;
         }

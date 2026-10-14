@@ -113,6 +113,7 @@
   const musicTracks=["muzik1.mp3","muzik2.mp3","muzik3.mp3","muzik4.mp3"];
   let naturalFlowEnabled=true;
   let naturalClipTimer=null;
+  let naturalEndedHandler=null;
   let chatClipLoops=0;
   let chatModeUntil=0;
   let lastNaturalClip="";
@@ -188,14 +189,21 @@
     if(which==="smoke")lastSmokePrompt=index;else lastWaitingPrompt=index;
     speakAnswer(list[index]);
   }
+  function stopNaturalClipSchedule(){
+    if(naturalClipTimer){clearTimeout(naturalClipTimer);naturalClipTimer=null;}
+    if(naturalEndedHandler){backgroundVideo.removeEventListener("ended",naturalEndedHandler);naturalEndedHandler=null;}
+    // Soru/cevap sırasında aktif videonun kendi kendine bitip siyah kalmasını önle.
+    backgroundVideo.loop=true;
+  }
   function scheduleNextNaturalClip(delay=900){
     if(naturalClipTimer)clearTimeout(naturalClipTimer);
-    naturalClipTimer=setTimeout(playNextNaturalClip,delay);
+    naturalClipTimer=setTimeout(()=>{naturalClipTimer=null;playNextNaturalClip();},delay);
   }
   function playNextNaturalClip(){
     if(!naturalFlowEnabled || activeQuestionId!==null)return;
     const clip=pickDifferentName(naturalClips,lastNaturalClip);
     lastNaturalClip=clip;
+    if(naturalEndedHandler){backgroundVideo.removeEventListener("ended",naturalEndedHandler);naturalEndedHandler=null;}
     setBackground(clip);
     // Tütsü sahnesinde her seferinde farklı, kısa ve doğal bir hatırlatma.
     if(clip==="tutsuyakma.mp4"){
@@ -215,6 +223,7 @@
     backgroundVideo.loop=false;
     const onEnded=()=>{
       backgroundVideo.removeEventListener("ended",onEnded);
+      if(naturalEndedHandler===onEnded)naturalEndedHandler=null;
       if(clip==="sohbetbildirim.mp4" && chatClipLoops<9 && activeQuestionId===null){
         chatClipLoops++;
         backgroundVideo.currentTime=0;
@@ -224,6 +233,7 @@
       chatModeUntil=0;
       scheduleNextNaturalClip(700+Math.floor(Math.random()*1100));
     };
+    naturalEndedHandler=onEnded;
     backgroundVideo.addEventListener("ended",onEnded);
   }
   function startNaturalFlow(){
@@ -245,13 +255,20 @@
 
   function setBackground(file){
     const wanted="/"+file;
+    backgroundVideo.loop=true;
     if(!backgroundVideo.getAttribute("src")?.endsWith(wanted)){
       backgroundVideo.src=wanted;
       backgroundVideo.load();
     }
     const playPromise=backgroundVideo.play();
-    if(playPromise && typeof playPromise.catch==="function") playPromise.catch(()=>{});
+    if(playPromise && typeof playPromise.catch==="function") playPromise.catch(error=>console.warn("Video oynatma bekliyor:",file,error?.message||error));
   }
+  backgroundVideo.addEventListener("error",()=>{
+    const current=backgroundVideo.getAttribute("src")||"";
+    console.error("Arka plan videosu yüklenemedi:",current);
+    // Bir doğal sahne yüklenemezse ana videoya dön; siyah ekranda kalma.
+    if(!current.endsWith("/tarot.mp4")) setTimeout(()=>setBackground("tarot.mp4"),250);
+  });
   function hideThreeCards(){if(threeCardsEl)threeCardsEl.style.display="none";}
   function hideRelationshipCards(){if(relationshipCardsEl)relationshipCardsEl.style.display="none";}
   const interactionPanelEl=document.getElementById("interactionPanel");
@@ -343,7 +360,7 @@
         return;
       }
       if(data.type==="tarot_start"){
-        stopNaturalFlow(); activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
+        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         waitingLabelEl.style.display="none";
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -362,7 +379,7 @@
         return;
       }
       if(data.type==="burc_start"){
-        stopNaturalFlow(); activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
+        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         if(burcIntroAudio){burcIntroAudio.pause();burcIntroAudio.currentTime=0;}
@@ -383,7 +400,7 @@
         return;
       }
       if(data.type==="magic_start"){
-        stopNaturalFlow(); activeQuestionId=data.questionId; hideInteractionPanel();
+        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
         waitingLabelEl.style.display="none";
@@ -399,7 +416,7 @@
         return;
       }
       if(data.type==="iliski_start"){
-        stopNaturalFlow(); activeQuestionId=data.questionId; hideInteractionPanel();
+        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel();
         hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -441,7 +458,7 @@
       }
 
       if(data.type==="threecard_start"){
-        stopNaturalFlow(); activeQuestionId=data.questionId; hideInteractionPanel();
+        stopNaturalClipSchedule(); activeQuestionId=data.questionId; hideInteractionPanel();
         setBackground("tarot.mp4");
         hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
