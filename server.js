@@ -1312,19 +1312,19 @@ function connectTikTok() {
       // Hediye, geçmiş sohbet mesajlarını ödüle dönüştürmez. Her hediye
       // kendi başına tek bir ödül görevi oluşturur; mevcut sıra bozulmaz.
 
-      // Gift name is the primary key: coin count alone is not enough because
-      // Balloon and Confetti both cost 100 coins but unlock different readings.
+      // TEST: Beş özellik farklı 1 coin hediyeye bağlandı.
+      // Yalnızca server.js içindeki hediye eşleştirmesi değiştirildi.
       let rewardKind = null;
-      if (normalizedGiftName.includes("donut") || normalizedGiftName.includes("doughnut") || normalizedGiftName.includes("donat")) {
-        rewardKind = "magic"; // Donut, 30 coins -> Sihirli Mesaj
-      } else if (normalizedGiftName === "tea" || normalizedGiftName === "cay" || normalizedGiftName.includes("tea gift")) {
-        rewardKind = "tarot"; // Tea, 50 coins -> Tek Kart
-      } else if (normalizedGiftName === "hat" || normalizedGiftName.includes("sapka") || normalizedGiftName.includes("hat gift")) {
-        rewardKind = "burc"; // Hat, 99 coins -> Burç
-      } else if (normalizedGiftName.includes("balloon") || normalizedGiftName.includes("balon")) {
-        rewardKind = "threecard"; // Balloon, 100 coins -> Üç Kart
-      } else if (normalizedGiftName.includes("confetti") || normalizedGiftName.includes("konfeti")) {
-        rewardKind = "iliski"; // Confetti, 100 coins -> İlişki
+      if (normalizedGiftName === "rose" || normalizedGiftName === "gül" || normalizedGiftName === "gul") {
+        rewardKind = "magic"; // Rose / Gül -> Sihirli Mesaj
+      } else if (normalizedGiftName.includes("ice cream cone") || normalizedGiftName.includes("dondurma")) {
+        rewardKind = "burc"; // Ice Cream Cone / Dondurma -> Burç
+      } else if (normalizedGiftName.includes("mate melody")) {
+        rewardKind = "tarot"; // Mate Melody -> Tek Kart
+      } else if (normalizedGiftName.includes("love you so much") || normalizedGiftName.includes("beni sev")) {
+        rewardKind = "iliski"; // Love you so much / Beni Sev -> İlişki
+      } else if (normalizedGiftName === "clap clap" || normalizedGiftName.includes("clap clap")) {
+        rewardKind = "threecard"; // Clap Clap -> Üç Kart
       }
 
       if (!rewardKind) {
