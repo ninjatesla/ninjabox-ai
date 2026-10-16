@@ -1079,8 +1079,7 @@ function connectTikTok() {
       TIKTOK_USERNAME,
       {
         processInitialData: false,
-        fetchRoomInfoOnConnect: true,
-        enableExtendedGiftInfo: true
+        fetchRoomInfoOnConnect: true
       }
     );
 
@@ -1364,12 +1363,11 @@ function connectTikTok() {
         data.user?.nickname ||
         "izleyici";
       const nickname = data.user?.nickname || username;
-      // Extended gift info is preferred when enabled; event fields remain fallback.
-      const giftDetails = data.extendedGiftInfo || data.giftDetails || data.gift || {};
+      const giftDetails = data.giftDetails || data.gift || data.extendedGiftInfo || {};
       const giftName = String(
-        data.giftName || data.gift_name ||
         giftDetails.giftName || giftDetails.name || giftDetails.gift_name ||
-        data.extendedGiftInfo?.giftName || data.extendedGiftInfo?.name || ""
+        data.giftName || data.gift_name || data.extendedGiftInfo?.giftName ||
+        data.extendedGiftInfo?.name || ""
       ).trim();
       const normalizedGiftName = normalizeTurkishText(giftName);
       const giftId = data.giftId ?? giftDetails.giftId ?? giftDetails.id ?? null;
@@ -1406,18 +1404,30 @@ function connectTikTok() {
       // Gerçek hediye adlarına göre eşleştirme.
       // Yalnızca bu hediye eşleştirme bölümü değiştirildi.
       let rewardKind = null;
-      if (/\b(donat|donut|doughnut)\b/.test(normalizedGiftName)) {
-        rewardKind = "magic"; // Donat / Donut / Doughnut 30 coin -> Sihirli Mesaj
-      } else if (/\b(cay|tea)\b/.test(normalizedGiftName)) {
-        rewardKind = "tarot"; // Çay / Tea 50 coin -> Tek Kart Tarot
-      } else if (/\b(sapka|hat|cap)\b/.test(normalizedGiftName)) {
-        rewardKind = "burc"; // Şapka / Hat / Cap 99 coin -> Burç Yorumu
+      if (
+        normalizedGiftName.includes("donat") ||
+        normalizedGiftName.includes("donut")
+      ) {
+        rewardKind = "magic"; // Donat / Donut 30 coin -> Sihirli Mesaj
       } else if (
-        /\b(balon|balloon)\b/.test(normalizedGiftName) ||
-        normalizedGiftName.includes("balloon gift box")
+        normalizedGiftName === "cay" ||
+        normalizedGiftName.includes("tea")
+      ) {
+        rewardKind = "tarot"; // Çay / Tea 50 coin -> Tek Kart Tarot
+      } else if (
+        normalizedGiftName.includes("sapka") ||
+        normalizedGiftName === "hat"
+      ) {
+        rewardKind = "burc"; // Şapka / Hat 99 coin -> Burç Yorumu
+      } else if (
+        normalizedGiftName === "balon" ||
+        normalizedGiftName.includes("balloon")
       ) {
         rewardKind = "threecard"; // Balon / Balloon 100 coin -> Üç Kart Açılımı
-      } else if (/\b(konfeti|confetti)\b/.test(normalizedGiftName)) {
+      } else if (
+        normalizedGiftName.includes("konfeti") ||
+        normalizedGiftName.includes("confetti")
+      ) {
         rewardKind = "iliski"; // Konfeti / Confetti 100 coin -> İlişki Açılımı
       }
 
