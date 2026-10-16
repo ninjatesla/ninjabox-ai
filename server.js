@@ -1079,8 +1079,7 @@ function connectTikTok() {
       TIKTOK_USERNAME,
       {
         processInitialData: false,
-        fetchRoomInfoOnConnect: true,
-        enableExtendedGiftInfo: true
+        fetchRoomInfoOnConnect: true
       }
     );
 
@@ -1364,12 +1363,11 @@ function connectTikTok() {
         data.user?.nickname ||
         "izleyici";
       const nickname = data.user?.nickname || username;
-      // Extended gift info is preferred when enabled; event fields remain fallback.
-      const giftDetails = data.extendedGiftInfo || data.giftDetails || data.gift || {};
+      const giftDetails = data.giftDetails || data.gift || data.extendedGiftInfo || {};
       const giftName = String(
-        data.giftName || data.gift_name ||
         giftDetails.giftName || giftDetails.name || giftDetails.gift_name ||
-        data.extendedGiftInfo?.giftName || data.extendedGiftInfo?.name || ""
+        data.giftName || data.gift_name || data.extendedGiftInfo?.giftName ||
+        data.extendedGiftInfo?.name || ""
       ).trim();
       const normalizedGiftName = normalizeTurkishText(giftName);
       const giftId = data.giftId ?? giftDetails.giftId ?? giftDetails.id ?? null;
@@ -1404,7 +1402,7 @@ function connectTikTok() {
       // kendi başına tek bir ödül görevi oluşturur; mevcut sıra bozulmaz.
 
       // Gerçek hediye adlarına göre eşleştirme.
-      // Yalnızca bu hediye eşleştirme bölümü değiştirildi.
+      // Yalnızca hediye eşleştirme bölümü değiştirildi; diğer akışlara dokunulmadı.
       let rewardKind = null;
       if (/\b(donat|donut|doughnut)\b/.test(normalizedGiftName)) {
         rewardKind = "magic"; // Donat / Donut / Doughnut 30 coin -> Sihirli Mesaj
@@ -1412,11 +1410,8 @@ function connectTikTok() {
         rewardKind = "tarot"; // Çay / Tea 50 coin -> Tek Kart Tarot
       } else if (/\b(sapka|hat|cap)\b/.test(normalizedGiftName)) {
         rewardKind = "burc"; // Şapka / Hat / Cap 99 coin -> Burç Yorumu
-      } else if (
-        /\b(balon|balloon)\b/.test(normalizedGiftName) ||
-        normalizedGiftName.includes("balloon gift box")
-      ) {
-        rewardKind = "threecard"; // Balon / Balloon 100 coin -> Üç Kart Açılımı
+      } else if (/\b(balon|balloon)\b/.test(normalizedGiftName)) {
+        rewardKind = "threecard"; // Balon / Balloon / Balloon Gift Box 100 coin -> Üç Kart Açılımı
       } else if (/\b(konfeti|confetti)\b/.test(normalizedGiftName)) {
         rewardKind = "iliski"; // Konfeti / Confetti 100 coin -> İlişki Açılımı
       }
