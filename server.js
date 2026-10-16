@@ -201,6 +201,26 @@ function broadcast(event) {
 wss.on("connection", (socket) => {
   clients.add(socket);
 
+  // Yayın sayfası yeniden bağlandığında eski tarayıcıya ait tamamlanma kilidi
+  // kuyrukta kalmasın. Bekleyen istemci zamanlayıcılarını temizleyip sırayı sürdür.
+  if (waitingForClientCompletion !== null) {
+    console.log("QUEUE: İstemci yeniden bağlandı; eski bekleme kilidi temizleniyor:", waitingForClientCompletion);
+    waitingForClientCompletion = null;
+    if (completionSafetyTimer) { clearTimeout(completionSafetyTimer); completionSafetyTimer = null; }
+    if (burcInputTimer) { clearTimeout(burcInputTimer); burcInputTimer = null; }
+    if (relationshipInputTimer) { clearTimeout(relationshipInputTimer); relationshipInputTimer = null; }
+    if (paidTarotInputTimer) { clearTimeout(paidTarotInputTimer); paidTarotInputTimer = null; }
+    if (threeCardInputTimer) { clearTimeout(threeCardInputTimer); threeCardInputTimer = null; }
+    activeBurcRequest = null;
+    activeRelationshipRequest = null;
+    activePaidTarotRequest = null;
+    activeThreeCardRequest = null;
+    processingQuestion = false;
+    setTimeout(() => {
+      if (questionQueue.length > 0) processQuestionQueue();
+    }, 300);
+  }
+
   socket.send(
     JSON.stringify({
       type: "status",
@@ -1381,19 +1401,34 @@ function connectTikTok() {
       // Hediye, geçmiş sohbet mesajlarını ödüle dönüştürmez. Her hediye
       // kendi başına tek bir ödül görevi oluşturur; mevcut sıra bozulmaz.
 
-      // TEST: Beş özellik farklı 1 coin hediyeye bağlandı.
-      // Yalnızca server.js içindeki hediye eşleştirmesi değiştirildi.
+      // Gerçek hediye adlarına göre eşleştirme.
+      // Yalnızca bu hediye eşleştirme bölümü değiştirildi.
       let rewardKind = null;
-      if (normalizedGiftName === "rose" || normalizedGiftName === "gül" || normalizedGiftName === "gul") {
-        rewardKind = "magic"; // Rose / Gül -> Sihirli Mesaj
-      } else if (normalizedGiftName.includes("ice cream cone") || normalizedGiftName.includes("dondurma")) {
-        rewardKind = "burc"; // Ice Cream Cone / Dondurma -> Burç
-      } else if (normalizedGiftName.includes("mate melody")) {
-        rewardKind = "tarot"; // Mate Melody -> Tek Kart
-      } else if (normalizedGiftName.includes("love you so much") || normalizedGiftName.includes("beni sev")) {
-        rewardKind = "iliski"; // Love you so much / Beni Sev -> İlişki
-      } else if (normalizedGiftName === "clap clap" || normalizedGiftName.includes("clap clap")) {
-        rewardKind = "threecard"; // Clap Clap -> Üç Kart
+      if (
+        normalizedGiftName.includes("donat") ||
+        normalizedGiftName.includes("donut")
+      ) {
+        rewardKind = "magic"; // Donat / Donut 30 coin -> Sihirli Mesaj
+      } else if (
+        normalizedGiftName === "cay" ||
+        normalizedGiftName.includes("tea")
+      ) {
+        rewardKind = "tarot"; // Çay / Tea 50 coin -> Tek Kart Tarot
+      } else if (
+        normalizedGiftName.includes("sapka") ||
+        normalizedGiftName === "hat"
+      ) {
+        rewardKind = "burc"; // Şapka / Hat 99 coin -> Burç Yorumu
+      } else if (
+        normalizedGiftName === "balon" ||
+        normalizedGiftName.includes("balloon")
+      ) {
+        rewardKind = "threecard"; // Balon / Balloon 100 coin -> Üç Kart Açılımı
+      } else if (
+        normalizedGiftName.includes("konfeti") ||
+        normalizedGiftName.includes("confetti")
+      ) {
+        rewardKind = "iliski"; // Konfeti / Confetti 100 coin -> İlişki Açılımı
       }
 
       if (!rewardKind) {
