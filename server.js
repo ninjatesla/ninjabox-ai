@@ -1179,6 +1179,9 @@ function connectTikTok() {
         return;
       }
 
+      // Manuel müzik, sohbet mesajı geldiğinde durdurulur. Mevcut soru/hediye kuyruğu değişmez.
+      broadcast({ type: "chat_activity", username: event.username || event.nickname || "izleyici" });
+
       console.log(
         "CHAT:",
         event.username,
@@ -1347,6 +1350,17 @@ function connectTikTok() {
 
       // Diğer tüm izleyicilerde hediye öncesi sohbet mesajları işlem/kuyruk oluşturmaz.
       console.log("CHAT: Aktif hediye oturumu için gerekli girdi yok; mesaj yok sayıldı:", event.username, "=>", event.comment);
+    }
+  );
+
+  // Son katılan izleyiciyi manuel H butonuna ilet. Kuyruk/ödül akışına dokunmaz.
+  tiktokConnection.on(
+    WebcastEvent.MEMBER,
+    (data) => {
+      const username = data.user?.displayId || data.user?.uniqueId || data.user?.nickname || data.displayId || data.uniqueId || "";
+      if (!username) return;
+      console.log("MEMBER JOINED:", username);
+      broadcast({ type: "member_joined", username });
     }
   );
 

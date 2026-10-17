@@ -35,7 +35,7 @@
     .relationship-card .card-name{font-size:clamp(9px,2.2vw,12px);font-weight:bold;line-height:1.1;margin-top:3px;overflow-wrap:anywhere}
     .relationship-card .card-side{font-size:9px;opacity:.9;margin-top:2px}
     .orientation,.answer,.chat-panel{display:none!important}.status{position:absolute;bottom:2%;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:10px;white-space:nowrap;z-index:8}
-    .controls{position:fixed;bottom:5%;left:5%;right:5%;display:flex;gap:10px;z-index:9999}.control-button{flex:1;min-width:0;min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(0,0,0,.82);color:#fff;font-size:clamp(12px,3.2vw,15px);font-weight:700;padding:10px 6px}
+    .controls{position:fixed;bottom:5%;left:5%;right:5%;display:flex;gap:6px;z-index:9999}.control-button{flex:1;min-width:0;min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(0,0,0,.88);color:#fff;font-size:16px;font-weight:800;padding:8px 2px}
     .reward-toast{display:none;position:absolute;left:5%;right:5%;bottom:13%;padding:12px 14px;border:1px solid rgba(255,215,0,.75);border-radius:14px;background:rgba(0,0,0,.88);color:#ffe58a;text-align:center;font-weight:700;font-size:clamp(14px,3.6vw,19px);z-index:20;text-shadow:0 1px 3px #000}
     .interaction-panel{display:none;position:absolute;top:13.5%;right:2.5%;width:min(43vw,230px);z-index:30;border:1px solid rgba(255,218,100,.9);border-radius:13px;overflow:hidden;background:rgba(8,7,12,.93);box-shadow:0 0 14px rgba(255,201,66,.35);color:#fff;pointer-events:none}
     .interaction-title{padding:7px 9px;text-align:center;color:#ffe7a0;font-weight:800;font-size:clamp(10px,2.8vw,14px);letter-spacing:.4px;border-bottom:1px solid rgba(255,215,100,.35)}
@@ -45,13 +45,19 @@
   </style>
 </head>
 <body>
-  <div class="controls">
-    <button id="voiceTestButton" class="control-button" type="button">SES TESTİ</button>
-    <div class="control-button" style="display:flex;align-items:center;justify-content:center;" aria-live="polite">TAROT LIVE HAZIR</div>
+  <div class="controls" aria-label="Manuel yayın kontrolleri">
+    <button id="voiceTestButton" class="control-button" type="button" aria-label="Ses testi">S</button>
+    <button id="welcomeButton" class="control-button" type="button" aria-label="Karşılama mesajı">M</button>
+    <button id="followButton" class="control-button" type="button" aria-label="Takip hatırlatması">T</button>
+    <button id="likeButton" class="control-button" type="button" aria-label="Beğeni hatırlatması">B</button>
+    <button id="questionButton" class="control-button" type="button" aria-label="Soru daveti">C</button>
+    <button id="musicButton" class="control-button" type="button" aria-label="Rastgele müzik">Ş</button>
+    <button id="lastJoinButton" class="control-button" type="button" aria-label="Son katılana hoş geldin">H</button>
   </div>
   <div class="live">
     <video id="backgroundVideo" class="background-video" src="/tarot.mp4" autoplay muted loop playsinline></video>
     <audio id="burcIntroAudio" src="/burc.mp3" preload="auto"></audio>
+    <audio id="manualMusicAudio" preload="auto"></audio>
     <div class="overlay">
       <div id="status" class="status">NinjaBox · Sesli yorum aktif</div>
       <div id="rewardToast" class="reward-toast"></div>
@@ -189,6 +195,14 @@
     try{
       const data=JSON.parse(event.data);
       console.log("LIVE EVENT:",data);
+      if(data.type==="member_joined"){
+        if(data.username) lastJoinedUsername=data.username;
+        return;
+      }
+      if(data.type==="chat_activity"){
+        if(manualMusicAudio && !manualMusicAudio.paused) stopManualMusic();
+        return;
+      }
       if(data.type==="gift_input_timeout"){
         if(Number(data.questionId)!==Number(activeQuestionId)) return;
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
@@ -219,6 +233,7 @@
         return;
       }
       if(data.type==="tarot_start"){
+        stopManualMusic();
         activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         waitingLabelEl.style.display="none";
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
@@ -238,6 +253,7 @@
         return;
       }
       if(data.type==="burc_start"){
+        stopManualMusic();
         activeQuestionId=data.questionId; hideInteractionPanel(); setBackground("tarot.mp4"); hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -259,6 +275,7 @@
         return;
       }
       if(data.type==="magic_start"){
+        stopManualMusic();
         activeQuestionId=data.questionId; hideInteractionPanel();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
         if(finishSafetyTimer){clearTimeout(finishSafetyTimer);finishSafetyTimer=null;}
@@ -275,6 +292,7 @@
         return;
       }
       if(data.type==="iliski_start"){
+        stopManualMusic();
         activeQuestionId=data.questionId; hideInteractionPanel();
         hideThreeCards(); hideRelationshipCards();
         if(displayCleanupTimer){clearTimeout(displayCleanupTimer);displayCleanupTimer=null;}
@@ -317,6 +335,7 @@
       }
 
       if(data.type==="threecard_start"){
+        stopManualMusic();
         activeQuestionId=data.questionId; hideInteractionPanel();
         setBackground("tarot.mp4");
         hideThreeCards(); hideRelationshipCards();
@@ -353,10 +372,101 @@
       }
     }catch(error){console.error("LIVE event error:",error);}
   }
+  const manualMusicAudio=document.getElementById("manualMusicAudio");
+  let lastJoinedUsername="";
+  const manualMessages={
+    welcome:[
+      "Merhaba, yayınımıza hoş geldiniz!",
+      "Hepiniz NinjaBox yayınına hoş geldiniz.",
+      "Aramıza yeni katılan herkese hoş geldiniz!",
+      "Hoş geldiniz arkadaşlar, keyifli bir yayın olsun.",
+      "NinjaBox ailesine hoş geldiniz, iyi ki geldiniz.",
+      "Herkese merhaba, güzel bir yayın için buradayız.",
+      "Yayınımıza katılan herkesi sevgiyle selamlıyoruz.",
+      "Merhaba dostlar, hepiniz hoş geldiniz.",
+      "Yeni gelenler, yayınımıza hoş geldiniz.",
+      "Hepinize kocaman bir merhaba, hoş geldiniz.",
+      "NinjaBox canlı yayınına hoş geldiniz.",
+      "Katıldığınız için mutluyuz, hoş geldiniz.",
+      "Herkese iyi akşamlar, yayınımıza hoş geldiniz.",
+      "Gelen herkese selamlar, keyifli vakit geçirelim.",
+      "Hoş geldiniz, şimdi birlikte güzel bir yayın yapalım."
+    ],
+    follow:[
+      "Kanalımızı takip etmeyi unutmayalım, şimdiden teşekkürler!",
+      "Bizi takip ederek NinjaBox ailesine katılabilirsiniz.",
+      "Desteğiniz için teşekkürler, takip etmeyi unutmayın.",
+      "NinjaBox'ı takip ederseniz yeni yayınlarımızı kaçırmazsınız.",
+      "Takipleriniz bize güç veriyor, teşekkür ederiz.",
+      "Kanalımıza takip bırakmayı unutmayalım arkadaşlar.",
+      "Bize destek olmak için kanalımızı takip edebilirsiniz.",
+      "Takip eden herkese şimdiden çok teşekkürler.",
+      "NinjaBox ailesi büyüyor, siz de takip ederek katılın.",
+      "Yayınları kaçırmamak için takipte kalın.",
+      "Kanalı takip edip bize destek olabilirsiniz.",
+      "Takibiniz için şimdiden teşekkür ederiz.",
+      "Bizi takip etmeyi ve NinjaBox ailesine katılmayı unutmayın.",
+      "Bir takip desteği bizi çok mutlu eder, teşekkürler.",
+      "Takipleriniz için sağ olun, iyi ki varsınız."
+    ],
+    like:[
+      "Yayını beğenmeyi unutmayalım, teşekkür ederim!",
+      "Beğenilerinizle bize destek olabilirsiniz.",
+      "Desteğiniz ve güzel enerjiniz için teşekkürler.",
+      "Bir beğeni bırakabilirseniz çok seviniriz.",
+      "Yayını beğenen herkese çok teşekkürler.",
+      "Beğeni desteğinizi bekliyoruz arkadaşlar.",
+      "Beğenileriniz yayını daha fazla kişiye ulaştırıyor, sağ olun.",
+      "Yayına küçük bir beğeni bırakmayı unutmayın.",
+      "Desteğiniz için sağ olun, beğenileriniz çok değerli.",
+      "Herkese teşekkürler, beğeni bırakmayı unutmayalım.",
+      "Bir beğeniyle NinjaBox'a destek olabilirsiniz.",
+      "Yayını beğenen ve destek olan herkese teşekkür ederiz.",
+      "Ellerinize sağlık, desteğiniz için teşekkürler.",
+      "Güzel desteğiniz için sağ olun arkadaşlar.",
+      "Beğenileriniz için çok teşekkür ederiz."
+    ],
+    question:[
+      "Sorunuzu sohbete yazabilirsiniz, birlikte yorumlayalım.",
+      "Aklınızda bir soru varsa şimdi sorabilirsiniz.",
+      "Tarot yorumu için sorunuzu sohbete gönderebilirsiniz.",
+      "Merak ettiğiniz konuyu yazın, kartların mesajına bakalım.",
+      "Sorunuzu bekliyoruz, sohbete yazabilirsiniz.",
+      "İlişki, iş veya gelecek hakkında sorunuzu paylaşabilirsiniz.",
+      "Bir sorunuz varsa sohbete yazmanız yeterli.",
+      "Kartlarla yorumlanmasını istediğiniz sorunuzu gönderebilirsiniz.",
+      "Gerçek bir Tarot yorumcusundan öneriler almak isterseniz sorunuzu yazın.",
+      "Aklınızdaki soruyu net bir şekilde sohbete yazabilirsiniz.",
+      "Tarot açılımı için sorunuzu bekliyoruz.",
+      "Sorunuzu yazın, size özel yorum sırası hediye üzerinden açılır.",
+      "Bugün neyi merak ediyorsunuz? Sorunuzu sohbete yazabilirsiniz.",
+      "İlişki veya kariyer sorularınızı paylaşabilirsiniz.",
+      "Yorum almak istediğiniz soruyu sohbete gönderebilirsiniz."
+    ]
+  };
+  function randomItem(items){return items[Math.floor(Math.random()*items.length)];}
+  function stopManualMusic(){if(manualMusicAudio){manualMusicAudio.pause();manualMusicAudio.currentTime=0;}}
+  function speakManualMessage(text){stopManualMusic();speakAnswer(text);}
+  const voiceTestButton=document.getElementById("voiceTestButton");
+  if(voiceTestButton) voiceTestButton.onclick=()=>speakManualMessage("Merhaba. NinjaBox ses testi çalışıyor.");
+  document.getElementById("welcomeButton").onclick=()=>speakManualMessage(randomItem(manualMessages.welcome));
+  document.getElementById("followButton").onclick=()=>speakManualMessage(randomItem(manualMessages.follow));
+  document.getElementById("likeButton").onclick=()=>speakManualMessage(randomItem(manualMessages.like));
+  document.getElementById("questionButton").onclick=()=>speakManualMessage(randomItem(manualMessages.question));
+  document.getElementById("musicButton").onclick=()=>{
+    if(!manualMusicAudio)return;
+    window.speechSynthesis?.cancel();
+    const track=1+Math.floor(Math.random()*4);
+    manualMusicAudio.pause();manualMusicAudio.src="/muzik"+track+".mp3";manualMusicAudio.loop=true;manualMusicAudio.currentTime=0;
+    manualMusicAudio.play().catch(error=>console.error("Müzik başlatılamadı:",error));
+  };
+  document.getElementById("lastJoinButton").onclick=()=>{
+    if(!lastJoinedUsername){speakManualMessage("Henüz yeni katılan bir izleyici bilgisi alınmadı.");return;}
+    const cleanName=lastJoinedUsername.replace(/^@/,"");
+    speakManualMessage(cleanName+", NinjaBox yayınına hoş geldin!");
+  };
   connectSocket();
   if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
-  const voiceTestButton=document.getElementById("voiceTestButton");
-  if(voiceTestButton) voiceTestButton.onclick=()=>speakAnswer("Merhaba. NinjaBox ses testi çalışıyor.");
 </script>
 </body>
 </html>
