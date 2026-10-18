@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#000000">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="manifest" href="/manifest.json">
   <title>NinjaBox Tarot LIVE</title>
@@ -35,7 +36,7 @@
     .relationship-card .card-name{font-size:clamp(9px,2.2vw,12px);font-weight:bold;line-height:1.1;margin-top:3px;overflow-wrap:anywhere}
     .relationship-card .card-side{font-size:9px;opacity:.9;margin-top:2px}
     .orientation,.answer,.chat-panel{display:none!important}.status{position:absolute;bottom:2%;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:10px;white-space:nowrap;z-index:8}
-    .controls{position:fixed;bottom:5%;left:5%;right:5%;display:flex;gap:6px;z-index:9999}.control-button{flex:1;min-width:0;min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(0,0,0,.88);color:#fff;font-size:16px;font-weight:800;padding:8px 2px}
+    .controls{position:fixed;bottom:5%;left:3%;right:3%;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;z-index:9999;width:94%}.control-button{width:100%;min-width:0;min-height:44px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(0,0,0,.92);color:#fff;font-size:clamp(12px,3.2vw,16px);font-weight:800;padding:8px 0}
     .reward-toast{display:none;position:absolute;left:5%;right:5%;bottom:13%;padding:12px 14px;border:1px solid rgba(255,215,0,.75);border-radius:14px;background:rgba(0,0,0,.88);color:#ffe58a;text-align:center;font-weight:700;font-size:clamp(14px,3.6vw,19px);z-index:20;text-shadow:0 1px 3px #000}
     .interaction-panel{display:none;position:absolute;top:13.5%;right:2.5%;width:min(43vw,230px);z-index:30;border:1px solid rgba(255,218,100,.9);border-radius:13px;overflow:hidden;background:rgba(8,7,12,.93);box-shadow:0 0 14px rgba(255,201,66,.35);color:#fff;pointer-events:none}
     .interaction-title{padding:7px 9px;text-align:center;color:#ffe7a0;font-weight:800;font-size:clamp(10px,2.8vw,14px);letter-spacing:.4px;border-bottom:1px solid rgba(255,215,100,.35)}
@@ -53,6 +54,7 @@
     <button id="questionButton" class="control-button" type="button" aria-label="Soru daveti">C</button>
     <button id="musicButton" class="control-button" type="button" aria-label="Rastgele müzik">Ş</button>
     <button id="lastJoinButton" class="control-button" type="button" aria-label="Son katılana hoş geldin">H</button>
+    <button id="randomTestButton" class="control-button" type="button" aria-label="Rastgele açılım testi">A</button>
   </div>
   <div class="live">
     <video id="backgroundVideo" class="background-video" src="/tarot.mp4" autoplay muted loop playsinline></video>
@@ -464,6 +466,16 @@
     if(!lastJoinedUsername){speakManualMessage("Henüz yeni katılan bir izleyici bilgisi alınmadı.");return;}
     const cleanName=lastJoinedUsername.replace(/^@/,"");
     speakManualMessage(cleanName+", NinjaBox yayınına hoş geldin!");
+  };
+  document.getElementById("randomTestButton").onclick=()=>{
+    const commands=["iliski","burc","3kart","sihirli"];
+    const command=randomItem(commands);
+    if(!socket || socket.readyState!==WebSocket.OPEN){
+      speakManualMessage("Sunucu bağlantısı hazır değil. Biraz sonra tekrar deneyin.");
+      return;
+    }
+    socket.send(JSON.stringify({type:"manual_random_test",command}));
+    console.log("RASTGELE TEST KOMUTU GÖNDERİLDİ:",command);
   };
   connectSocket();
   if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
